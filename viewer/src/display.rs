@@ -12,7 +12,6 @@ use epd_waveshare::{
 use esp_idf_svc::hal::{
     delay::FreeRtos,
     gpio::{AnyIOPin, AnyInputPin, AnyOutputPin, Input, Output, PinDriver, Pull},
-    peripheral::Peripheral,
     spi::{config::Config, SpiAnyPins, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
     units::FromValueType,
 };
@@ -25,22 +24,22 @@ const COLOR: Color = Color::White;
 pub const BORDER: u32 = 3;
 const REFRESH_THRESHOLD: u8 = 20;
 
-pub struct ScenePins {
-    pub sck: AnyOutputPin,
-    pub mosi: AnyOutputPin,
-    pub cs: AnyOutputPin,
-    pub dc: AnyOutputPin,
-    pub rst: AnyOutputPin,
-    pub busy: AnyInputPin,
+pub struct ScenePins<'a> {
+    pub sck: AnyOutputPin<'a>,
+    pub mosi: AnyOutputPin<'a>,
+    pub cs: AnyOutputPin<'a>,
+    pub dc: AnyOutputPin<'a>,
+    pub rst: AnyOutputPin<'a>,
+    pub busy: AnyInputPin<'a>,
 }
 
 pub struct Scene<'a> {
     spi: SpiDeviceDriver<'a, SpiDriver<'a>>,
     epd: Epd1in54<
         SpiDeviceDriver<'a, SpiDriver<'a>>,
-        PinDriver<'a, AnyInputPin, Input>,
-        PinDriver<'a, AnyOutputPin, Output>,
-        PinDriver<'a, AnyOutputPin, Output>,
+        PinDriver<'a, Input>,
+        PinDriver<'a, Output>,
+        PinDriver<'a, Output>,
         FreeRtos,
     >,
     display: Display1in54,
@@ -51,7 +50,7 @@ pub struct Scene<'a> {
 }
 
 impl<'a> Scene<'a> {
-    pub fn new<S: SpiAnyPins>(p_spi: impl Peripheral<P = S> + 'a, pins: ScenePins) -> Result<Self> {
+    pub fn new<S: SpiAnyPins + 'a>(p_spi: S, pins: ScenePins<'a>) -> Result<Self> {
         let dc = PinDriver::output(pins.dc)?;
         let rst = PinDriver::output(pins.rst)?;
         let busy = PinDriver::input(pins.busy, Pull::Floating)?;

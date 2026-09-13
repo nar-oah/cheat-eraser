@@ -13,13 +13,13 @@ enum ButtonEdge {
     Released,
 }
 
-pub struct ControlButton<'d, T: InputPin> {
-    button: PinDriver<'d, T, Input>,
+pub struct ControlButton<'d> {
+    button: PinDriver<'d, Input>,
     state: bool,
 }
 
-impl<'d, T: InputPin + OutputPin> ControlButton<'d, T> {
-    pub fn init(pin: T) -> anyhow::Result<Self> {
+impl<'d> ControlButton<'d> {
+    pub fn init<T: InputPin + OutputPin + 'd>(pin: T) -> anyhow::Result<Self> {
         let button = PinDriver::input(pin, Pull::Up)?;
         let state = button.is_low();
         Ok(Self { button, state })
@@ -41,14 +41,17 @@ impl<'d, T: InputPin + OutputPin> ControlButton<'d, T> {
     }
 }
 
-pub struct ButtonController<'d, L: InputPin, R: InputPin> {
-    left: ControlButton<'d, L>,
-    right: ControlButton<'d, R>,
+pub struct ButtonController<'d> {
+    left: ControlButton<'d>,
+    right: ControlButton<'d>,
     chord: bool,
 }
 
-impl<'d, L: InputPin + OutputPin, R: InputPin + OutputPin> ButtonController<'d, L, R> {
-    pub fn init(left: L, right: R) -> anyhow::Result<Self> {
+impl<'d> ButtonController<'d> {
+    pub fn init<L: InputPin + OutputPin + 'd, R: InputPin + OutputPin + 'd>(
+        left: L,
+        right: R,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             left: ControlButton::init(left)?,
             right: ControlButton::init(right)?,
