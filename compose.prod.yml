@@ -1,0 +1,78 @@
+services:
+  api:
+    image: ghcr.io/nar-oah/cheat-eraser/api:latest
+    container_name: cheat-eraser-api
+    restart: always
+    networks:
+      - traefik
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - backup:/app/api/backup
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          from urllib.request import urlopen;
+          urlopen("http://127.0.0.1:8000/pages", timeout=2)
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.cheat-eraser.rule=Host(`aws.naroah.top`) && PathPrefix(`/cheat`)"
+      - "traefik.http.routers.cheat-eraser.entrypoints=websecure"
+      - "traefik.http.routers.cheat-eraser.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cheat-eraser.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.cheat-eraser-strip.stripprefix.prefixes=/cheat"
+      - "traefik.http.routers.cheat-eraser.middlewares=cheat-eraser-strip"
+
+  ai:
+    image: ghcr.io/nar-oah/cheat-eraser/ai:latest
+    container_name: cheat-eraser-ai
+    restart: unless-stopped
+    networks:
+      - backend
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          celery -A main:celery_app inspect ping
+          -d celery@$$HOSTNAME --timeout=5 | grep -q pong
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  redis:
+    image: redis:8-alpine
+    container_name: cheat-eraser-redis
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  backup:
+    name: cheat-eraser-backup
+
+networks:
+  traefik:
+    external: true
+  backend:
