@@ -81,7 +81,7 @@ const URL: &str = "https://aws.naroah.top/cheat/";
 
 ESP-IDF 相关配置在：
 
-- `.cargo/config.toml`：目标平台、runner、ESP-IDF 版本。
+- `.cargo/config.toml`：目标平台、runner 与 ESP-IDF `v5.5.3`；工具安装在当前 workspace 的 `.embuild/` 中。
 - `rust-toolchain.toml`：使用 `esp` Rust toolchain。
 - `sdkconfig.defaults`：ESP32-S3 PSRAM、主任务栈等配置。
 
@@ -106,13 +106,13 @@ source ~/export-esp.sh
 仅构建：
 
 ```sh
-cargo build
+cargo build --release
 ```
 
 烧录并打开串口监视器：
 
 ```sh
-cargo run
+cargo run --release
 ```
 
 `.cargo/config.toml` 已配置：
