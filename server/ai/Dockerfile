@@ -21,4 +21,4 @@ COPY --from=builder /app/ai /app/ai
 ENV PATH="/app/.venv/bin:$PATH"
 WORKDIR /app/ai
 
-CMD ["celery", "-A", "main:celery_app", "worker", "-Q", "cheat-eraser-ai", "--pool=threads", "--concurrency=4", "--loglevel=info"]
+CMD ["celery", "-A", "main:celery_app", "worker", "-Q", "cheat-eraser-ai", "--pool=threads", "--concurrency=1", "--loglevel=info"]

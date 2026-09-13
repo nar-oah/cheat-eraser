@@ -27,7 +27,7 @@ server/
 - `ai` 消费 `cheat-eraser-ai` 队列，执行 Gemini 请求与公式图片生成。
 - `contracts` 保存两个服务共享的 Pydantic 响应模型。
 
-API 必须保持单 worker、单副本，否则进程内的当前试卷会被拆散。AI 可以在一个 Celery 进程内使用线程并发，但也不应横向扩成多个容器，因为当前答案同样保存在内存中。
+API 必须保持单 worker、单副本，否则进程内的当前试卷会被拆散。AI 同样保持单进程、单并发且不横向扩容，因为当前答案保存在内存中。
 
 ## 安装
 
@@ -60,7 +60,7 @@ CELERY_BROKER_URL=redis://127.0.0.1:6379/0 \
 CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1 \
 GEMINI_API_KEY=your-api-key \
 uv run celery -A main:celery_app worker -Q cheat-eraser-ai \
-  --pool=threads --concurrency=4 --loglevel=info
+  --pool=threads --concurrency=1 --loglevel=info
 ```
 
 启动 API：
