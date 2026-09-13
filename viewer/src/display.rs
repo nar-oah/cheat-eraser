@@ -64,7 +64,7 @@ impl<'a> Scene<'a> {
             &Config::new().baudrate(2.MHz().into()),
         )?;
         let epd = Epd1in54::new(&mut spi, busy, dc, rst, &mut FreeRtos, Some(10))?;
-        return Ok(Self {
+        Ok(Self {
             spi,
             epd,
             display: Display1in54::default(),
@@ -72,7 +72,7 @@ impl<'a> Scene<'a> {
             is_sleep: false,
             active_time: Instant::now(),
             refresh_count: REFRESH_THRESHOLD,
-        });
+        })
     }
     pub fn add_line(&mut self, start: Point, end: Point) -> Result<()> {
         Line::new(start, end)
@@ -82,7 +82,7 @@ impl<'a> Scene<'a> {
     }
     pub fn add_text(&mut self, text: &str, point: Point) -> Result<()> {
         let style = self.text_style.clone();
-        embedded_graphics::text::Text::new(&text, point, style).draw(&mut self.display)?;
+        embedded_graphics::text::Text::new(text, point, style).draw(&mut self.display)?;
         Ok(())
     }
     pub fn mod_logo(&mut self, bmp_data: Vec<u8>) -> Result<()> {

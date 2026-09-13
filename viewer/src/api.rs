@@ -53,10 +53,10 @@ impl ApiClient {
         Ok(result)
     }
     pub fn get_pages(&mut self) -> Result<Pages> {
-        return self.get_request::<Pages>("pages");
+        self.get_request::<Pages>("pages")
     }
     pub fn get_missing(&mut self) -> Result<Missing> {
-        return self.get_request::<Missing>("missing");
+        self.get_request::<Missing>("missing")
     }
     pub fn get_answer(&mut self) -> Result<Option<Answer>> {
         let bytes = self.get_bytes("answer")?;
@@ -85,10 +85,10 @@ impl ApiClient {
         Ok(())
     }
     pub fn reset(&mut self) -> Result<()> {
-        return self.post_request("reset");
+        self.post_request("reset")
     }
     pub fn upload(&mut self) -> Result<()> {
-        return self.post_request("upload");
+        self.post_request("upload")
     }
     pub fn get_formula(&mut self, position: (u8, u8)) -> Result<Formula> {
         let url = format!("{}{}", URL, "formula");
