@@ -108,7 +108,6 @@ jobs:
           script_stop: true
           script: |
             set -eu
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             cd "${{ env.DEPLOY_DIR }}"
             docker compose -f "${{ env.COMPOSE_FILE }}" config >/dev/null
             docker compose -f "${{ env.COMPOSE_FILE }}" pull

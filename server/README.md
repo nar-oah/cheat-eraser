@@ -116,5 +116,5 @@ docker compose -f compose.prod.yml up -d --wait
 - `SERVER_HOST`
 - `SERVER_USER`
 - `SERVER_SSH_KEY`
-- `GHCR_USERNAME`
-- `GHCR_TOKEN`，只需具备读取私有 package 的权限
+
+工作流使用 Actions 内建的 `GITHUB_TOKEN` 推送镜像。Compose 拉取沿用参考项目的约定：GHCR package 需公开，或部署机需提前完成 GHCR 登录。
