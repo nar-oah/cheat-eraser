@@ -1,14 +1,26 @@
 import cv2
+from celery.result import AsyncResult
 from typing import Dict, List, Optional, Tuple
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks
+from fastapi import BackgroundTasks, FastAPI, File, UploadFile
+from cheat_eraser_contracts.answer import AnswerResponse
 from pretreatment import TestPaper
-from ai import AnswerResponse, Ai
 from exam_backup import save_exam
+from tasks import add_answer, get_answer, get_formula
 
 
 app = FastAPI()
 exam = TestPaper(100.0)
-ai = Ai()
+answer_task: AsyncResult | None = None
+answer_cache: AnswerResponse | None = None
+
+
+def mod_answer(result: dict[str, object] | None) -> None:
+    global answer_cache
+    answer_cache = (
+        AnswerResponse.model_validate(result)
+        if isinstance(result, dict)
+        else answer_cache
+    )
 
 
 @app.post("/pre-check")
@@ -27,26 +39,27 @@ async def get_missing() -> Dict[str, List[int]]:
 
 
 @app.post("/upload")
-async def add_image(tasks: BackgroundTasks) -> None:
+async def add_image() -> None:
+    global answer_task
     papers: List[bytes] = [
         res[1].tobytes()
         for _, paper in sorted(exam.papers.items())
         if paper.paper is not None
         if (res := cv2.imencode(".jpg", paper.paper))[0]
     ]
-    tasks.add_task(ai.get_answer, papers)
+    mod_answer(get_answer(answer_task))
+    answer_task = add_answer(papers)
 
 
 @app.get("/answer")
 async def get_result() -> Optional[AnswerResponse]:
-    if ai.answer:
-        return AnswerResponse.get_response(ai.answer)
-    return None
+    mod_answer(get_answer(answer_task))
+    return answer_cache
 
 
 @app.post("/formula")
-async def get_formula(position: Tuple[int, int]) -> Optional[bytes]:
-    return ai.get_formula(position)
+async def get_formula_image(position: Tuple[int, int]) -> Optional[bytes]:
+    return get_formula(position)
 
 
 @app.post("/reset")
@@ -59,4 +72,4 @@ async def reset() -> None:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
