@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
@@ -7,7 +7,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY . .
 RUN uv sync --locked --no-dev --no-editable --package cheat-eraser-api
 
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

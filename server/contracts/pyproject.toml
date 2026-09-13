@@ -2,7 +2,7 @@
 name = "cheat-eraser-contracts"
 version = "0.1.0"
 description = "Shared models for Cheat Eraser services"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.13.5",
 ]
