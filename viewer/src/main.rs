@@ -22,12 +22,12 @@ fn main() -> Result<()> {
 
     let pins = peripherals.pins;
     let display_pins = ScenePins {
-        sck: pins.gpio7.downgrade_output(),
-        mosi: pins.gpio9.downgrade_output(),
-        cs: pins.gpio1.downgrade_output(),
-        dc: pins.gpio2.downgrade_output(),
-        rst: pins.gpio3.downgrade_output(),
-        busy: pins.gpio4.downgrade_input(),
+        sck: pins.gpio7.degrade_output(),
+        mosi: pins.gpio9.degrade_output(),
+        cs: pins.gpio1.degrade_output(),
+        dc: pins.gpio2.degrade_output(),
+        rst: pins.gpio3.degrade_output(),
+        busy: pins.gpio4.degrade_input(),
     };
     let mut buttons = ButtonController::init(pins.gpio6, pins.gpio5)?;
     let scene = display::Scene::new(peripherals.spi2, display_pins)?;
