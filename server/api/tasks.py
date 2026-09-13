@@ -19,11 +19,12 @@ def add_answer(images: list[bytes]) -> AsyncResult:
 
 
 def get_answer(task: AsyncResult | None) -> dict[str, object] | None:
-    return (
+    result = (
         task.get(propagate=False)
         if isinstance(task, AsyncResult) and task.ready()
         else None
     )
+    return result if isinstance(result, dict) else None
 
 
 def get_formula(position: tuple[int, int]) -> bytes | None:
