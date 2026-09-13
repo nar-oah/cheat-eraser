@@ -1,11 +1,12 @@
 from celery import Celery
 from celery.result import AsyncResult
+from os import getenv
 
 QUEUE = "cheat-eraser-ai"
 celery_app = Celery(
     "cheat-eraser-api",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/1",
+    broker=getenv("CELERY_BROKER_URL", "redis://redis:6379/0"),
+    backend=getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1"),
 )
 
 

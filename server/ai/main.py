@@ -1,11 +1,12 @@
 from celery import Celery
 from ai import Ai
 from cheat_eraser_contracts.answer import Answer, AnswerResponse
+from os import getenv
 
 celery_app = Celery(
     "cheat-eraser-ai",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/1",
+    broker=getenv("CELERY_BROKER_URL", "redis://redis:6379/0"),
+    backend=getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1"),
 )
 ai = Ai()
 
