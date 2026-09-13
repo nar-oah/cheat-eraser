@@ -1,0 +1,71 @@
+# --- Rust 相关 ---
+# 编译产物目录（最重要，包含所有生成的二进制文件和中间件）
+/target/
+.embuild/*
+
+# 如果你使用的是 cargo-spellcheck 等工具产生的临时文件
+**/*.rs.bk
+
+# --- Cargo 相关 ---
+# Cargo.lock 文件的处理建议：
+# 1. 如果你的项目是一个【可执行程序 (Binary)】，你应该删除下面这一行的注释，将 Cargo.lock 提交到 Git。
+# 2. 如果你的项目是一个【库 (Library)】，建议保留下面这行，即不提交 Cargo.lock。
+# Cargo.lock
+
+# Cargo 生成的临时备份文件（通常在发布到 crates.io 时产生）
+Cargo.toml.orig
+
+# --- 编译器产生的辅助文件 ---
+*.pdb
+*.exe
+*.dll
+*.so
+*.dylib
+*.rlib
+*.node
+
+# --- 编辑器/IDE 相关 ---
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# IntelliJ / PyCharm / CLion
+.idea/
+*.iml
+
+# Vim
+*~
+*.swp
+*.swo
+
+# --- 操作系统相关 ---
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Linux
+.fuse_hidden*
+
+# --- 环境与日志 ---
+# 环境变量文件（包含敏感信息，绝不能提交）
+.env
+.env.*
+!.env.example
+
+# 日志文件
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- 其他 ---
+# 性能分析数据
+assets/capnproto/
+debug/
