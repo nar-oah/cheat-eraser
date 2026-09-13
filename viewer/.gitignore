@@ -1,8 +1,0 @@
-/.vscode
-/.embuild
-/target
-/Cargo.lock
-# macOS
-.DS_Store
-TODO.md
-Layout.md
