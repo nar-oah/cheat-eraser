@@ -9,6 +9,10 @@ RUN uv sync --locked --no-dev --no-editable --package cheat-eraser-api
 
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/api /app/api
