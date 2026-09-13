@@ -20,8 +20,7 @@ pub struct ControlButton<'d, T: InputPin> {
 
 impl<'d, T: InputPin + OutputPin> ControlButton<'d, T> {
     pub fn init(pin: T) -> anyhow::Result<Self> {
-        let mut button = PinDriver::input(pin)?;
-        button.set_pull(Pull::Up)?;
+        let button = PinDriver::input(pin, Pull::Up)?;
         let state = button.is_low();
         Ok(Self { button, state })
     }

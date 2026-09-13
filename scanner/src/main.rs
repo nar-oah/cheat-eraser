@@ -1,5 +1,5 @@
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
-use esp_idf_svc::hal::prelude::*;
+use esp_idf_svc::hal::peripherals::Peripherals;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -15,8 +15,7 @@ fn main() -> anyhow::Result<()> {
     let _wifi = wifi::connect(peripherals.modem)?;
     camera::init()?;
 
-    let mut button = PinDriver::input(peripherals.pins.gpio2)?;
-    button.set_pull(Pull::Up)?;
+    let button = PinDriver::input(peripherals.pins.gpio2, Pull::Up)?;
     let mut prev_is_pressed = false;
 
     let (tx, rx) = mpsc::channel::<Vec<u8>>();

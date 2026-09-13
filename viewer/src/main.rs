@@ -2,7 +2,7 @@ use anyhow::Result;
 use button::{ButtonController, ButtonEvent};
 use display::ScenePins;
 use esp_idf_svc::hal::gpio::{InputPin, OutputPin};
-use esp_idf_svc::hal::prelude::Peripherals;
+use esp_idf_svc::hal::peripherals::Peripherals;
 use std::thread;
 use std::time::Duration;
 mod api;

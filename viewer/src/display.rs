@@ -11,7 +11,7 @@ use epd_waveshare::{
 };
 use esp_idf_svc::hal::{
     delay::FreeRtos,
-    gpio::{AnyIOPin, AnyInputPin, AnyOutputPin, Input, Output, PinDriver},
+    gpio::{AnyIOPin, AnyInputPin, AnyOutputPin, Input, Output, PinDriver, Pull},
     peripheral::Peripheral,
     spi::{config::Config, SpiAnyPins, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
     units::FromValueType,
@@ -54,7 +54,7 @@ impl<'a> Scene<'a> {
     pub fn new<S: SpiAnyPins>(p_spi: impl Peripheral<P = S> + 'a, pins: ScenePins) -> Result<Self> {
         let dc = PinDriver::output(pins.dc)?;
         let rst = PinDriver::output(pins.rst)?;
-        let busy = PinDriver::input(pins.busy)?;
+        let busy = PinDriver::input(pins.busy, Pull::Floating)?;
         let mut spi = SpiDeviceDriver::new_single(
             p_spi,
             pins.sck,
