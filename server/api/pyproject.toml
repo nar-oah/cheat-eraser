@@ -1,0 +1,17 @@
+[project]
+name = "cheat-eraser-api"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "celery[redis]>=5.6.3",
+    "cheat-eraser-contracts",
+    "fastapi>=0.141.1",
+    "numpy>=2.4.6",
+    "opencv-python>=5.0.0.93",
+    "python-multipart>=0.0.32",
+    "rapidocr-onnxruntime>=1.4.4",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[tool.uv.sources]
+cheat-eraser-contracts = { workspace = true }

@@ -1,68 +1,11 @@
 from google import genai
 from google.genai import types
 from typing import List, Optional, Tuple
-from pydantic import BaseModel, Field
+from cheat_eraser_contracts.answer import Answer
 import ziamath as zm
 from PIL import Image
 import cairosvg
 import io
-
-
-class WordBase(BaseModel):
-    answer: str = Field(
-        title="答案",
-        description="""
-    仅填写中文和占位符
-    占位符格式：
-    - 所有数学公式按照顺序用$(数字)占位，具体的数学公式用latex的形式输出在math项。
-    - 所有英文单词和句子按照顺序用$[数字]占位，具体的英文单词或句子输出在english项。
-    """,
-    )
-    english: List[str] = Field(
-        title="英语单词或语句",
-        description="仅在后面的内容不是英语时拆分，如果一句话都是英文则存储整句",
-    )
-
-
-class WordProblems(WordBase):
-    math: List[str] = Field(title="数学公式", description="输出为latex")
-
-
-class WordResponse(WordBase):
-    math: int
-
-    @classmethod
-    def get_response(cls, obj: WordProblems):
-        data = obj.model_dump()
-        data["math"] = len(obj.math)
-        return cls(**data)
-
-
-class AnswerBase(BaseModel):
-    single_choice: List[str] = Field(
-        title="单选题", description='每题输出一个最佳选项字母（如 "A"）'
-    )
-    multiple_choice: List[str] = Field(
-        title="多选题", description='每题输出多个最佳选项字母（如 "ABC"）'
-    )
-    binary_choice: List[bool] = Field(title="判断题", description="每题输出判断结果")
-
-
-class Answer(AnswerBase):
-    non_choice: List[WordProblems] = Field(
-        title="非选择题", description="每题输出简洁的标准答案"
-    )
-
-
-class AnswerResponse(AnswerBase):
-    non_choice: List[WordResponse]
-
-    @classmethod
-    def get_response(cls, obj: Answer):
-        data = obj.model_dump()
-        words = [WordResponse.get_response(word) for word in obj.non_choice]
-        data["non_choice"] = words
-        return cls(**data)
 
 
 class Ai:

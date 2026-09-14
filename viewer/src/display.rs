@@ -11,8 +11,7 @@ use epd_waveshare::{
 };
 use esp_idf_svc::hal::{
     delay::FreeRtos,
-    gpio::{AnyIOPin, AnyInputPin, AnyOutputPin, Input, Output, PinDriver},
-    peripheral::Peripheral,
+    gpio::{AnyIOPin, AnyInputPin, AnyOutputPin, Input, Output, PinDriver, Pull},
     spi::{config::Config, SpiAnyPins, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
     units::FromValueType,
 };
@@ -25,22 +24,22 @@ const COLOR: Color = Color::White;
 pub const BORDER: u32 = 3;
 const REFRESH_THRESHOLD: u8 = 20;
 
-pub struct ScenePins {
-    pub sck: AnyOutputPin,
-    pub mosi: AnyOutputPin,
-    pub cs: AnyOutputPin,
-    pub dc: AnyOutputPin,
-    pub rst: AnyOutputPin,
-    pub busy: AnyInputPin,
+pub struct ScenePins<'a> {
+    pub sck: AnyOutputPin<'a>,
+    pub mosi: AnyOutputPin<'a>,
+    pub cs: AnyOutputPin<'a>,
+    pub dc: AnyOutputPin<'a>,
+    pub rst: AnyOutputPin<'a>,
+    pub busy: AnyInputPin<'a>,
 }
 
 pub struct Scene<'a> {
     spi: SpiDeviceDriver<'a, SpiDriver<'a>>,
     epd: Epd1in54<
         SpiDeviceDriver<'a, SpiDriver<'a>>,
-        PinDriver<'a, AnyInputPin, Input>,
-        PinDriver<'a, AnyOutputPin, Output>,
-        PinDriver<'a, AnyOutputPin, Output>,
+        PinDriver<'a, Input>,
+        PinDriver<'a, Output>,
+        PinDriver<'a, Output>,
         FreeRtos,
     >,
     display: Display1in54,
@@ -51,10 +50,10 @@ pub struct Scene<'a> {
 }
 
 impl<'a> Scene<'a> {
-    pub fn new<S: SpiAnyPins>(p_spi: impl Peripheral<P = S> + 'a, pins: ScenePins) -> Result<Self> {
+    pub fn new<S: SpiAnyPins + 'a>(p_spi: S, pins: ScenePins<'a>) -> Result<Self> {
         let dc = PinDriver::output(pins.dc)?;
         let rst = PinDriver::output(pins.rst)?;
-        let busy = PinDriver::input(pins.busy)?;
+        let busy = PinDriver::input(pins.busy, Pull::Floating)?;
         let mut spi = SpiDeviceDriver::new_single(
             p_spi,
             pins.sck,
@@ -65,7 +64,7 @@ impl<'a> Scene<'a> {
             &Config::new().baudrate(2.MHz().into()),
         )?;
         let epd = Epd1in54::new(&mut spi, busy, dc, rst, &mut FreeRtos, Some(10))?;
-        return Ok(Self {
+        Ok(Self {
             spi,
             epd,
             display: Display1in54::default(),
@@ -73,7 +72,7 @@ impl<'a> Scene<'a> {
             is_sleep: false,
             active_time: Instant::now(),
             refresh_count: REFRESH_THRESHOLD,
-        });
+        })
     }
     pub fn add_line(&mut self, start: Point, end: Point) -> Result<()> {
         Line::new(start, end)
@@ -83,7 +82,7 @@ impl<'a> Scene<'a> {
     }
     pub fn add_text(&mut self, text: &str, point: Point) -> Result<()> {
         let style = self.text_style.clone();
-        embedded_graphics::text::Text::new(&text, point, style).draw(&mut self.display)?;
+        embedded_graphics::text::Text::new(text, point, style).draw(&mut self.display)?;
         Ok(())
     }
     pub fn mod_logo(&mut self, bmp_data: Vec<u8>) -> Result<()> {

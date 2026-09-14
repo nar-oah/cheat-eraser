@@ -1,215 +1,120 @@
 # Cheat Eraser Server
 
-试卷图像预处理、缺题检测和答案生成服务。服务基于 FastAPI，接收试卷照片后通过 OpenCV 与 RapidOCR 做页面裁剪、清晰度过滤和题号识别，再调用 Google Gemini 生成按题型分类的答案。
+试卷图像预处理、缺题检测和答案生成服务。后端使用 Python 3.14 与 uv workspace，HTTP API 和 Gemini 任务分别运行在独立容器中，Redis 负责 Celery 消息与任务结果。
 
-## 功能
-
-- 上传试卷图片并按页码保留清晰度最高的版本。
-- OCR 识别大题、小题题号，返回缺失题号。
-- 将已收集的试卷页发送给 Gemini，生成选择题、判断题和非选择题答案。
-- 非选择题答案中的数学公式使用占位符返回，并可按索引生成公式图片。
-- 重置当前试卷状态时将已处理页面备份到 `backup/`。
-
-## 项目结构
+## 结构
 
 ```text
-.
-├── main.py                # FastAPI 入口与接口定义
-├── ai.py                  # Gemini 调用、答案结构和公式图片生成
-├── ocr.py                 # OCR、页码识别、裁剪和缺题计算辅助逻辑
-├── pretreatment.py        # 试卷图片预处理与页面状态管理
-├── exam_backup.py         # reset 时保存当前试卷快照
-├── requirements.txt       # Python 依赖
-└── cheat-eraser.service   # systemd 服务示例
+server/
+├── pyproject.toml
+├── uv.lock
+├── api/
+│   ├── Dockerfile
+│   ├── main.py
+│   ├── tasks.py
+│   ├── ocr.py
+│   ├── pretreatment.py
+│   └── exam_backup.py
+├── ai/
+│   ├── Dockerfile
+│   ├── main.py
+│   └── ai.py
+└── contracts/
+    └── src/cheat_eraser_contracts/
 ```
 
-运行时目录：
+- `api` 保留试卷页面的进程内状态，提供原有 `/pre-check`、`/pages`、`/missing`、`/upload`、`/answer`、`/formula` 和 `/reset` 接口。
+- `ai` 消费 `cheat-eraser-ai` 队列，执行 Gemini 请求与公式图片生成。
+- `contracts` 保存两个服务共享的 Pydantic 响应模型。
 
-- `.env`：环境变量文件，包含 API Key。
-- `saved_images/`：本地调试图片目录。
-- `output/`：本地调试输出目录。
-- `backup/`：调用 `/reset` 后生成的试卷备份目录。
+API 必须保持单 worker、单副本，否则进程内的当前试卷会被拆散。AI 同样保持单进程、单并发且不横向扩容，因为当前答案保存在内存中。
 
-这些目录和敏感文件已在 `.gitignore` 中忽略。
-
-## 环境要求
-
-- Python 3.11
-- 可访问 Google Gemini API 的 API Key
-
-创建虚拟环境并安装依赖：
+## 安装
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+cd server
+uv sync --all-packages --locked
 ```
 
-创建 `.env`：
+创建仓库根目录的 `.env`：
 
-```bash
+```dotenv
 GEMINI_API_KEY=your-api-key
 ```
 
-`google-genai` 也支持 `GOOGLE_API_KEY`。如果两个变量都设置，SDK 会优先使用 `GOOGLE_API_KEY`。
+也可使用 `GOOGLE_API_KEY`；两者同时存在时 Google SDK 优先读取 `GOOGLE_API_KEY`。
 
 ## 本地启动
 
-```bash
-source venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-也可以直接运行入口文件：
+先启动 Redis：
 
 ```bash
-source venv/bin/activate
-python main.py
+docker run --rm --name cheat-eraser-redis -p 6379:6379 redis:8-alpine
 ```
 
-服务启动后访问：
+启动 AI worker：
 
-- API 根地址：`http://localhost:8000`
-- Swagger 文档：`http://localhost:8000/docs`
+```bash
+cd server/ai
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0 \
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1 \
+GEMINI_API_KEY=your-api-key \
+uv run celery -A main:celery_app worker -Q cheat-eraser-ai \
+  --pool=threads --concurrency=1 --loglevel=info
+```
+
+启动 API：
+
+```bash
+cd server/api
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0 \
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1 \
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+```
+
+Swagger 文档位于 `http://127.0.0.1:8000/docs`。
 
 ## 接口流程
 
-1. 上传试卷页：
+1. `POST /pre-check` 上传字段名为 `file` 的试卷图片。
+2. `GET /pages` 与 `GET /missing` 轮询当前扫描状态。
+3. `POST /upload` 提交已收集页面给 AI worker。
+4. `GET /answer` 轮询答案；生成完成前返回 `null`。
+5. `POST /formula` 以 `[非选择题索引, 公式索引]` 请求公式图片。
+6. `POST /reset` 将当前页面写入 `backup/` 后重置试卷。
+
+## Docker 与生产部署
+
+两个应用镜像都以 `server/` 为构建上下文：
 
 ```bash
-curl -X POST http://localhost:8000/pre-check \
-  -F "file=@/path/to/paper.jpg"
+docker build -f server/api/Dockerfile -t cheat-eraser-api server
+docker build -f server/ai/Dockerfile -t cheat-eraser-ai server
 ```
 
-该接口会把图片处理任务放入后台队列。图片需要足够清晰，并且能通过 OCR 识别页码。
+仓库根目录的 `compose.prod.yml` 会拉取：
 
-2. 查看已收集页码：
+- `ghcr.io/nar-oah/cheat-eraser/api:latest`
+- `ghcr.io/nar-oah/cheat-eraser/ai:latest`
+- `redis:8-alpine`
+
+API 通过已有的外部 `traefik` 网络发布到 `https://aws.naroah.top/cheat`。部署主机需要预先创建该网络：
 
 ```bash
-curl http://localhost:8000/pages
+docker network create traefik
+docker compose -f compose.prod.yml up -d --wait
 ```
 
-返回示例：
+`backup/` 使用名为 `cheat-eraser-backup` 的 Docker volume 持久化。旧 systemd 部署中的备份不会自动进入该 volume，切换前需按需要手工迁移。
 
-```json
-[1, 2, 3]
-```
+## 自动部署
 
-3. 查看缺失题号：
+`.github/workflows/deploy.yml` 在 `main` 的后端相关变更上构建并推送 API、AI 镜像，然后通过 SSH 上传 Compose 文件并更新服务。版本标签 `v*.*.*` 还会发布对应的镜像标签，但不会触发服务器部署。
 
-```bash
-curl http://localhost:8000/missing
-```
+需要配置以下 GitHub Secrets：
 
-返回示例：
+- `SERVER_HOST`
+- `SERVER_USER`
+- `SERVER_SSH_KEY`
 
-```json
-{
-  "一": [3, 4],
-  "二": []
-}
-```
-
-4. 触发答案生成：
-
-```bash
-curl -X POST http://localhost:8000/upload
-```
-
-该接口同样在后台调用 Gemini。调用后可轮询 `/answer` 获取结果。
-
-5. 获取答案：
-
-```bash
-curl http://localhost:8000/answer
-```
-
-返回结构：
-
-```json
-{
-  "single_choice": ["A", "C"],
-  "multiple_choice": ["AB", "BCD"],
-  "binary_choice": [true, false],
-  "non_choice": [
-    {
-      "answer": "答案文本，公式用$(0)占位，英文用$[0]占位",
-      "english": ["example"],
-      "math": 1
-    }
-  ]
-}
-```
-
-6. 获取公式图片：
-
-```bash
-curl -X POST http://localhost:8000/formula \
-  -H "Content-Type: application/json" \
-  -d '[0, 0]'
-```
-
-请求体格式为 `[非选择题索引, 公式索引]`。接口返回对应公式图片字节或 `null`。
-
-7. 重置当前试卷：
-
-```bash
-curl -X POST http://localhost:8000/reset
-```
-
-重置前会将当前处理出的试卷页面和识别信息保存到 `backup/<timestamp>/`。
-
-## 本地调试脚本
-
-处理 `saved_images/` 中的试卷图片并输出到 `output/`：
-
-```bash
-source venv/bin/activate
-python pretreatment.py
-```
-
-使用 `output/filter3.png` 调试 Gemini 答案生成与公式渲染：
-
-```bash
-source venv/bin/activate
-python ai.py
-```
-
-## systemd 部署
-
-仓库提供了 `cheat-eraser.service` 示例。默认配置假设项目位于：
-
-```text
-/home/admin/cheat_eraser
-```
-
-部署前按实际服务器调整以下字段：
-
-- `User`
-- `Group`
-- `WorkingDirectory`
-- `EnvironmentFile`
-- `ExecStart`
-
-安装服务：
-
-```bash
-sudo cp cheat-eraser.service /etc/systemd/system/cheat-eraser.service
-sudo systemctl daemon-reload
-sudo systemctl enable cheat-eraser
-sudo systemctl start cheat-eraser
-```
-
-查看状态和日志：
-
-```bash
-sudo systemctl status cheat-eraser
-sudo journalctl -u cheat-eraser -f
-```
-
-## 注意事项
-
-- `/pre-check` 和 `/upload` 都使用后台任务，接口返回成功不代表后台任务已经完成。
-- 当前服务状态保存在进程内存中，重启服务会丢失未备份的当前试卷状态。
-- `/reset` 会备份已处理页面，但不会备份原始上传文件。
-- Gemini 调用依赖外部网络和 API Key，`/answer` 在生成完成前会返回 `null`。
+工作流使用 Actions 内建的 `GITHUB_TOKEN` 推送镜像。Compose 拉取沿用参考项目的约定：GHCR package 需公开，或部署机需提前完成 GHCR 登录。

@@ -40,9 +40,7 @@ ESP32-S3 摄像头扫描器固件。设备连接 Wi-Fi 后初始化摄像头，�
 │   ├── wifi.rs      # Wi-Fi 连接配置
 │   ├── upload.rs    # 图片上传 HTTP 客户端
 │   └── bindings.h   # esp32-camera bindgen 入口
-├── scripts/
-│   ├── build.sh     # 构建固件
-│   └── flash.sh     # 构建并通过 web-flash 烧录
+├── .cargo/config.toml
 ├── sdkconfig.defaults
 ├── rust-toolchain.toml
 ├── Cargo.toml
@@ -51,14 +49,11 @@ ESP32-S3 摄像头扫描器固件。设备连接 Wi-Fi 后初始化摄像头，�
 
 ## 开发环境
 
-推荐使用仓库内的 Dev Container。容器配置位于 [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json)，会安装 ESP32-S3 Rust/ESP-IDF 相关工具和 VS Code 扩展。
-
-如果在本机开发，需要准备：
+需要准备：
 
 - ESP Rust 工具链，项目使用 [rust-toolchain.toml](rust-toolchain.toml) 中的 `esp` channel。
-- ESP-IDF 环境，项目配置为 ESP-IDF `v5.3.3`。
-- `idf.py` 或可被 `~/export-esp.sh` 初始化的 ESP-IDF 环境。
-- 用于烧录的 `web-flash` 命令。
+- `ldproxy` 与 `espflash`。
+- ESP-IDF `v5.5.3`；模板配置会将工具安装在当前 workspace 的 `.embuild/` 中。
 
 目标平台配置位于 [.cargo/config.toml](.cargo/config.toml)，默认 target 为 `xtensa-esp32s3-espidf`。
 
@@ -78,25 +73,19 @@ PSRAM 和任务栈等 ESP-IDF 配置位于 [sdkconfig.defaults](sdkconfig.defaul
 Release 构建：
 
 ```bash
-bash scripts/build.sh
-```
-
-或显式指定：
-
-```bash
-bash scripts/build.sh release
+cargo build --release
 ```
 
 Debug 构建：
 
 ```bash
-bash scripts/build.sh debug
+cargo build
 ```
 
 产物默认位于：
 
 ```text
-target/xtensa-esp32s3-espidf/<debug|release>/cheat-eraser
+target/xtensa-esp32s3-espidf/<debug|release>/scanner
 ```
 
 ## 烧录
@@ -104,26 +93,16 @@ target/xtensa-esp32s3-espidf/<debug|release>/cheat-eraser
 Release 构建并烧录：
 
 ```bash
-bash scripts/flash.sh
+cargo run --release
 ```
 
 Debug 构建并烧录：
 
 ```bash
-bash scripts/flash.sh debug
-```
-
-`flash.sh` 会调用：
-
-```bash
-web-flash --chip esp32s3 target/xtensa-esp32s3-espidf/<mode>/cheat-eraser
-```
-
-如果需要串口监控，也可以使用 `.cargo/config.toml` 中配置的 runner：
-
-```bash
 cargo run
 ```
+
+`.cargo/config.toml` 中的 runner 会调用 `espflash flash --monitor` 完成烧录并打开串口监控。
 
 ## 运行流程
 
