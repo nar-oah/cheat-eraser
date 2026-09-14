@@ -18,8 +18,16 @@ pub fn connect(modem: Modem<'static>) -> Result<BlockingWifi<EspWifi<'static>>> 
 
     wifi.set_configuration(&wifi_configuration)?;
     wifi.start()?;
-    wifi.connect()?;
-    wifi.wait_netif_up()?;
+    loop {
+        match wifi.connect().and_then(|_| wifi.wait_netif_up()) {
+            Ok(()) => break,
+            Err(err) => {
+                log::warn!("WiFi connection failed: {:?}. Retrying...", err);
+                let _ = wifi.disconnect();
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        }
+    }
     log::info!("WiFi connected");
     Ok(wifi)
 }
