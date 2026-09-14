@@ -48,9 +48,9 @@ pub fn init() -> Result<()> {
         ledc_channel: sys::ledc_channel_t_LEDC_CHANNEL_0,
 
         pixel_format: camera::pixformat_t_PIXFORMAT_JPEG,
-        frame_size: camera::framesize_t_FRAMESIZE_UXGA,
+        frame_size: camera::framesize_t_FRAMESIZE_QXGA,
 
-        jpeg_quality: 10,
+        jpeg_quality: 6,
         fb_count: 1,
         fb_location: camera::camera_fb_location_t_CAMERA_FB_IN_PSRAM,
         grab_mode: camera::camera_grab_mode_t_CAMERA_GRAB_LATEST,
@@ -60,5 +60,14 @@ pub fn init() -> Result<()> {
     if err != 0 {
         return Err(anyhow!("Camera init failed with error code: {}", err));
     }
+    let sensor = unsafe { camera::esp_camera_sensor_get() };
+    let pid = unsafe { (*sensor).id.PID };
+    let model = match pid {
+        0x26 => "OV2640",
+        0x3660 => "OV3660",
+        0x5640 => "OV5640",
+        _ => "Unknown",
+    };
+    log::info!("Camera detected: PID=0x{:04X}, model={}", pid, model);
     Ok(())
 }
