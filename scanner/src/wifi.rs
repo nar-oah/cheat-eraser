@@ -19,9 +19,7 @@ pub fn connect(modem: Modem<'static>) -> Result<BlockingWifi<EspWifi<'static>>> 
     wifi.set_configuration(&wifi_configuration)?;
     wifi.start()?;
     esp_idf_svc::sys::esp!(unsafe {
-        esp_idf_svc::sys::esp_wifi_set_ps(
-            esp_idf_svc::sys::wifi_ps_type_t_WIFI_PS_NONE,
-        )
+        esp_idf_svc::sys::esp_wifi_set_ps(esp_idf_svc::sys::wifi_ps_type_t_WIFI_PS_NONE)
     })?;
     esp_idf_svc::sys::esp!(unsafe {
         esp_idf_svc::sys::esp_wifi_set_bandwidth(
