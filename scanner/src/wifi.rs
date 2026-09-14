@@ -18,8 +18,25 @@ pub fn connect(modem: Modem<'static>) -> Result<BlockingWifi<EspWifi<'static>>> 
 
     wifi.set_configuration(&wifi_configuration)?;
     wifi.start()?;
-    wifi.connect()?;
-    wifi.wait_netif_up()?;
+    esp_idf_svc::sys::esp!(unsafe {
+        esp_idf_svc::sys::esp_wifi_set_ps(esp_idf_svc::sys::wifi_ps_type_t_WIFI_PS_NONE)
+    })?;
+    esp_idf_svc::sys::esp!(unsafe {
+        esp_idf_svc::sys::esp_wifi_set_bandwidth(
+            esp_idf_svc::sys::wifi_interface_t_WIFI_IF_STA,
+            esp_idf_svc::sys::wifi_bandwidth_t_WIFI_BW_HT20,
+        )
+    })?;
+    loop {
+        match wifi.connect().and_then(|_| wifi.wait_netif_up()) {
+            Ok(()) => break,
+            Err(err) => {
+                log::warn!("WiFi connection failed: {:?}. Retrying...", err);
+                let _ = wifi.wifi_mut().disconnect();
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        }
+    }
     log::info!("WiFi connected");
     Ok(wifi)
 }
