@@ -12,7 +12,10 @@ pub fn connect(
 )> {
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
-    let mut wifi = BlockingWifi::wrap(EspWifi::new(modem, sys_loop.clone(), Some(nvs))?, sys_loop)?;
+    let mut wifi = BlockingWifi::wrap(
+        EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
+        sys_loop.clone(),
+    )?;
     let ssid = "naroah";
     let password = "Ylds0601";
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
