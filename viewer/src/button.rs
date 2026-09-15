@@ -2,6 +2,7 @@ use esp_idf_svc::hal::gpio::{Input, InputPin, OutputPin, PinDriver, Pull};
 use std::time::{Duration, Instant};
 
 const LONG_PRESS_DURATION: Duration = Duration::from_millis(2500);
+const RELEASE_STABLE_DURATION: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ButtonEvent {
@@ -52,6 +53,7 @@ pub struct ButtonController<'d> {
     chord: bool,
     shutdown_pending: bool,
     waiting_for_release: bool,
+    released_at: Option<Instant>,
 }
 
 impl<'d> ButtonController<'d> {
@@ -68,6 +70,7 @@ impl<'d> ButtonController<'d> {
             chord: false,
             shutdown_pending: false,
             waiting_for_release,
+            released_at: None,
         })
     }
 
@@ -85,7 +88,7 @@ impl<'d> ButtonController<'d> {
         }
 
         if self.waiting_for_release {
-            if !left_pressed && !right_pressed {
+            if self.release_is_stable(!left_pressed && !right_pressed) {
                 self.waiting_for_release = false;
                 self.clear_press_state();
                 log::info!("Wake button released; button input ready");
@@ -110,7 +113,7 @@ impl<'d> ButtonController<'d> {
         }
 
         if self.shutdown_pending {
-            if !left_pressed && !right_pressed {
+            if self.release_is_stable(!left_pressed && !right_pressed) {
                 self.clear_press_state();
                 return Some(ButtonEvent::Shutdown);
             }
@@ -137,10 +140,22 @@ impl<'d> ButtonController<'d> {
         }
     }
 
+    fn release_is_stable(&mut self, all_released: bool) -> bool {
+        if !all_released {
+            self.released_at = None;
+            return false;
+        }
+        self.released_at
+            .get_or_insert_with(Instant::now)
+            .elapsed()
+            >= RELEASE_STABLE_DURATION
+    }
+
     fn clear_press_state(&mut self) {
         self.left_pressed_at = None;
         self.right_pressed_at = None;
         self.chord = false;
         self.shutdown_pending = false;
+        self.released_at = None;
     }
 }

@@ -19,6 +19,10 @@ fn enter_deep_sleep() -> Result<()> {
             sys::esp_sleep_pd_option_t_ESP_PD_OPTION_ON,
         )
     })?;
+    for pin in [sys::gpio_num_t_GPIO_NUM_5, sys::gpio_num_t_GPIO_NUM_6] {
+        sys::esp!(unsafe { sys::rtc_gpio_pullup_en(pin) })?;
+        sys::esp!(unsafe { sys::rtc_gpio_pulldown_dis(pin) })?;
+    }
     sys::esp!(unsafe {
         sys::esp_sleep_enable_ext1_wakeup(
             BUTTON_WAKEUP_MASK,
