@@ -26,8 +26,7 @@ fn enter_deep_sleep() -> Result<()> {
         )
     })?;
     log::info!("Entering deep sleep; GPIO5 or GPIO6 can wake the viewer");
-    unsafe { sys::esp_deep_sleep_start() };
-    Ok(())
+    unsafe { sys::esp_deep_sleep_start() }
 }
 
 fn main() -> Result<()> {
