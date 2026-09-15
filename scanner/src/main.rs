@@ -7,6 +7,32 @@ mod camera;
 mod upload;
 mod wifi;
 
+const LONG_PRESS_DURATION: Duration = Duration::from_millis(2500);
+const RELEASE_STABLE_DURATION: Duration = Duration::from_millis(100);
+
+fn enter_deep_sleep() -> anyhow::Result<()> {
+    esp_idf_sys::esp!(unsafe {
+        esp_idf_sys::esp_sleep_pd_config(
+            esp_idf_sys::esp_sleep_pd_domain_t_ESP_PD_DOMAIN_RTC_PERIPH,
+            esp_idf_sys::esp_sleep_pd_option_t_ESP_PD_OPTION_ON,
+        )
+    })?;
+    esp_idf_sys::esp!(unsafe {
+        esp_idf_sys::rtc_gpio_pullup_en(esp_idf_sys::gpio_num_t_GPIO_NUM_2)
+    })?;
+    esp_idf_sys::esp!(unsafe {
+        esp_idf_sys::rtc_gpio_pulldown_dis(esp_idf_sys::gpio_num_t_GPIO_NUM_2)
+    })?;
+    esp_idf_sys::esp!(unsafe {
+        esp_idf_sys::esp_sleep_enable_ext1_wakeup(
+            1_u64 << 2,
+            esp_idf_sys::esp_sleep_ext1_wakeup_mode_t_ESP_EXT1_WAKEUP_ANY_LOW,
+        )
+    })?;
+    log::info!("Entering deep sleep; GPIO2 can wake the scanner");
+    unsafe { esp_idf_sys::esp_deep_sleep_start() }
+}
+
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -26,6 +52,7 @@ fn main() -> anyhow::Result<()> {
     let mut pressed_at = None;
     let mut is_long_press = false;
     let mut waiting_for_release = woke_from_deep_sleep;
+    let mut released_at: Option<Instant> = None;
 
     let (tx, rx) = mpsc::channel::<Vec<u8>>();
     thread::Builder::new()
@@ -46,8 +73,13 @@ fn main() -> anyhow::Result<()> {
         let is_pressed = button.is_low();
 
         if waiting_for_release {
-            if !is_pressed {
+            if is_pressed {
+                released_at = None;
+            } else if released_at.get_or_insert_with(Instant::now).elapsed()
+                >= RELEASE_STABLE_DURATION
+            {
                 waiting_for_release = false;
+                released_at = None;
                 log::info!("Wake button released; button input ready");
             }
             thread::sleep(Duration::from_millis(50));
@@ -56,27 +88,18 @@ fn main() -> anyhow::Result<()> {
 
         if is_pressed != prev_is_pressed {
             if is_pressed {
-                log::info!("👇 按钮被按下了！ (Pressed)");
-                pressed_at = Some(Instant::now());
-                is_long_press = false;
+                if is_long_press {
+                    released_at = None;
+                } else {
+                    log::info!("👇 按钮被按下了！ (Pressed)");
+                    pressed_at = Some(Instant::now());
+                }
             } else if is_long_press
-                || pressed_at
-                    .is_some_and(|started| started.elapsed() >= Duration::from_millis(2500))
+                || pressed_at.is_some_and(|started| started.elapsed() >= LONG_PRESS_DURATION)
             {
-                log::info!("Long press -> deep sleep");
-                esp_idf_sys::esp!(unsafe {
-                    esp_idf_sys::esp_sleep_pd_config(
-                        esp_idf_sys::esp_sleep_pd_domain_t_ESP_PD_DOMAIN_RTC_PERIPH,
-                        esp_idf_sys::esp_sleep_pd_option_t_ESP_PD_OPTION_ON,
-                    )
-                })?;
-                esp_idf_sys::esp!(unsafe {
-                    esp_idf_sys::esp_sleep_enable_ext1_wakeup(
-                        1_u64 << 2,
-                        esp_idf_sys::esp_sleep_ext1_wakeup_mode_t_ESP_EXT1_WAKEUP_ANY_LOW,
-                    )
-                })?;
-                unsafe { esp_idf_sys::esp_deep_sleep_start() };
+                is_long_press = true;
+                released_at = Some(Instant::now());
+                log::info!("Long press released; waiting for stable button state");
             } else if pressed_at.is_some() {
                 log::info!("Short press -> capture");
                 let free = unsafe { esp_idf_sys::esp_get_free_heap_size() };
@@ -95,10 +118,17 @@ fn main() -> anyhow::Result<()> {
 
         if is_pressed
             && !is_long_press
-            && pressed_at.is_some_and(|started| started.elapsed() >= Duration::from_millis(2500))
+            && pressed_at.is_some_and(|started| started.elapsed() >= LONG_PRESS_DURATION)
         {
             is_long_press = true;
             log::info!("Long press detected; release button to enter deep sleep");
+        }
+
+        if is_long_press
+            && !is_pressed
+            && released_at.is_some_and(|started| started.elapsed() >= RELEASE_STABLE_DURATION)
+        {
+            enter_deep_sleep()?;
         }
 
         thread::sleep(Duration::from_millis(50));
