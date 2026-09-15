@@ -35,12 +35,6 @@ pub fn connect(
             esp_idf_svc::sys::wifi_bandwidth_t_WIFI_BW_HT20,
         )
     })?;
-    esp_idf_svc::sys::esp!(unsafe {
-        esp_idf_svc::sys::esp_wifi_set_protocol(
-            esp_idf_svc::sys::wifi_interface_t_WIFI_IF_STA,
-            (esp_idf_svc::sys::WIFI_PROTOCOL_11B | esp_idf_svc::sys::WIFI_PROTOCOL_11G) as u8,
-        )
-    })?;
 
     let subscription = sys_loop.subscribe::<WifiEvent, _>(|event| {
         if let WifiEvent::StaDisconnected(info) = event {
