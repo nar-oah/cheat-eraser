@@ -7,7 +7,7 @@ use embedded_graphics::{
 use epd_waveshare::{
     color::Color,
     epd1in54_v2::{Display1in54, Epd1in54},
-    prelude::WaveshareDisplay,
+    prelude::{RefreshLut, WaveshareDisplay},
 };
 use esp_idf_svc::hal::{
     delay::FreeRtos,
@@ -22,7 +22,6 @@ use u8g2_fonts::{fonts, U8g2TextStyle};
 const BACKGROUND: Color = Color::Black;
 const COLOR: Color = Color::White;
 pub const BORDER: u32 = 3;
-const REFRESH_THRESHOLD: u8 = 20;
 
 pub struct ScenePins<'a> {
     pub sck: AnyOutputPin<'a>,
@@ -46,7 +45,7 @@ pub struct Scene<'a> {
     text_style: U8g2TextStyle<Color>,
     is_sleep: bool,
     active_time: Instant,
-    refresh_count: u8,
+    refresh_lut: RefreshLut,
 }
 
 impl<'a> Scene<'a> {
@@ -71,7 +70,7 @@ impl<'a> Scene<'a> {
             text_style: U8g2TextStyle::new(fonts::u8g2_font_wqy12_t_gb2312, COLOR),
             is_sleep: false,
             active_time: Instant::now(),
-            refresh_count: REFRESH_THRESHOLD,
+            refresh_lut: RefreshLut::Full,
         })
     }
     pub fn add_line(&mut self, start: Point, end: Point) -> Result<()> {
@@ -111,26 +110,24 @@ impl<'a> Scene<'a> {
     }
     pub fn refresh(&mut self) -> Result<()> {
         self.check_wakeup()?;
-        if self.refresh_count >= REFRESH_THRESHOLD {
-            self.epd.update_and_display_frame(
-                &mut self.spi,
-                self.display.buffer(),
-                &mut FreeRtos,
-            )?;
-            self.refresh_count = 0;
-        } else {
-            self.epd.update_partial_frame(
-                &mut self.spi,
-                &mut FreeRtos,
-                self.display.buffer(),
-                0,
-                0,
-                200,
-                200,
-            )?;
-            self.epd.display_frame(&mut self.spi, &mut FreeRtos)?;
-            self.refresh_count += 1;
+        if self.refresh_lut != RefreshLut::Quick {
+            self.epd
+                .set_lut(&mut self.spi, &mut FreeRtos, Some(RefreshLut::Quick))?;
+            self.refresh_lut = RefreshLut::Quick;
         }
+        self.epd
+            .update_and_display_frame(&mut self.spi, self.display.buffer(), &mut FreeRtos)?;
+        Ok(())
+    }
+    pub fn full_refresh(&mut self) -> Result<()> {
+        self.check_wakeup()?;
+        if self.refresh_lut != RefreshLut::Full {
+            self.epd
+                .set_lut(&mut self.spi, &mut FreeRtos, Some(RefreshLut::Full))?;
+            self.refresh_lut = RefreshLut::Full;
+        }
+        self.epd
+            .update_and_display_frame(&mut self.spi, self.display.buffer(), &mut FreeRtos)?;
         Ok(())
     }
     pub fn clear(&mut self) -> Result<()> {
