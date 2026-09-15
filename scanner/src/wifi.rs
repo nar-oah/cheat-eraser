@@ -16,8 +16,8 @@ pub fn connect(
         EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
         sys_loop.clone(),
     )?;
-    let ssid = "naroah";
-    let password = "Ylds0601";
+    let ssid = "专用内网";
+    let password = "Yqj122529";
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: ssid.try_into().unwrap(),
         password: password.try_into().unwrap(),
