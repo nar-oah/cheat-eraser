@@ -58,7 +58,10 @@ fn main() -> anyhow::Result<()> {
                 log::info!("👇 按钮被按下了！ (Pressed)");
                 pressed_at = Some(Instant::now());
                 is_long_press = false;
-            } else if is_long_press {
+            } else if is_long_press
+                || pressed_at
+                    .is_some_and(|started| started.elapsed() >= Duration::from_millis(2500))
+            {
                 log::info!("Long press -> deep sleep");
                 esp_idf_sys::esp!(unsafe {
                     esp_idf_sys::esp_sleep_pd_config(
