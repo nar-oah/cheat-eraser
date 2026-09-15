@@ -1,6 +1,7 @@
 use anyhow::Result;
 use esp_idf_svc::eventloop::{EspSystemEventLoop, EspSystemSubscription};
 use esp_idf_svc::hal::modem::Modem;
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{BlockingWifi, ClientConfiguration, Configuration, EspWifi, WifiEvent};
 
 pub fn connect(
@@ -10,8 +11,9 @@ pub fn connect(
     BlockingWifi<EspWifi<'static>>,
 )> {
     let sys_loop = EspSystemEventLoop::take()?;
+    let nvs = EspDefaultNvsPartition::take()?;
     let mut wifi = BlockingWifi::wrap(
-        EspWifi::new(modem, sys_loop.clone(), None)?,
+        EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
         sys_loop.clone(),
     )?;
     let ssid = "naroah";
