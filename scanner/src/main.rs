@@ -20,6 +20,9 @@ fn main() -> anyhow::Result<()> {
     let _wifi = wifi::connect(peripherals.modem)?;
     camera::init()?;
 
+    esp_idf_sys::esp!(unsafe {
+        esp_idf_sys::rtc_gpio_deinit(esp_idf_sys::gpio_num_t_GPIO_NUM_2)
+    })?;
     let button = PinDriver::input(peripherals.pins.gpio2, Pull::Up)?;
     let mut prev_is_pressed = false;
     let mut pressed_at = None;
