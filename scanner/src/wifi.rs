@@ -17,7 +17,7 @@ pub fn connect(
         sys_loop.clone(),
     )?;
     let ssid = "naroah";
-    let password = "Ylds0601";
+    let password = "59aaf169d335c5d29c92457b9f89882bc986c1e89d1ee7814e24d22f7fa8c476";
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: ssid.try_into().unwrap(),
         password: password.try_into().unwrap(),
