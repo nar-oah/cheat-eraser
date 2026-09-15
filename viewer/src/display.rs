@@ -45,7 +45,7 @@ pub struct Scene<'a> {
     text_style: U8g2TextStyle<Color>,
     is_sleep: bool,
     active_time: Instant,
-    refresh_lut: Option<RefreshLut>,
+    refresh_lut: RefreshLut,
 }
 
 impl<'a> Scene<'a> {
@@ -70,7 +70,7 @@ impl<'a> Scene<'a> {
             text_style: U8g2TextStyle::new(fonts::u8g2_font_wqy12_t_gb2312, COLOR),
             is_sleep: false,
             active_time: Instant::now(),
-            refresh_lut: None,
+            refresh_lut: RefreshLut::Full,
         })
     }
     pub fn add_line(&mut self, start: Point, end: Point) -> Result<()> {
@@ -109,14 +109,11 @@ impl<'a> Scene<'a> {
         Ok(())
     }
     pub fn refresh(&mut self) -> Result<()> {
-        if self.refresh_lut.is_none() {
-            return self.full_refresh();
-        }
         self.check_wakeup()?;
-        if self.refresh_lut != Some(RefreshLut::Quick) {
+        if self.refresh_lut != RefreshLut::Quick {
             self.epd
                 .set_lut(&mut self.spi, &mut FreeRtos, Some(RefreshLut::Quick))?;
-            self.refresh_lut = Some(RefreshLut::Quick);
+            self.refresh_lut = RefreshLut::Quick;
         }
         self.epd.update_and_display_frame(
             &mut self.spi,
@@ -127,9 +124,10 @@ impl<'a> Scene<'a> {
     }
     pub fn full_refresh(&mut self) -> Result<()> {
         self.check_wakeup()?;
-        if self.refresh_lut != Some(RefreshLut::Full) {
+        if self.refresh_lut != RefreshLut::Full {
             self.epd
                 .set_lut(&mut self.spi, &mut FreeRtos, Some(RefreshLut::Full))?;
+            self.refresh_lut = RefreshLut::Full;
         }
         self.epd
             .update_and_display_frame(
@@ -137,7 +135,6 @@ impl<'a> Scene<'a> {
                 self.display.buffer(),
                 &mut FreeRtos,
             )?;
-        self.refresh_lut = Some(RefreshLut::Full);
         Ok(())
     }
     pub fn clear(&mut self) -> Result<()> {
