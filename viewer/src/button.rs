@@ -1,10 +1,13 @@
 use esp_idf_svc::hal::gpio::{Input, InputPin, OutputPin, PinDriver, Pull};
+use std::time::{Duration, Instant};
+
+const LONG_PRESS_DURATION: Duration = Duration::from_millis(2500);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ButtonEvent {
     Previous,
     Next,
-    Reset,
+    Shutdown,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,7 +28,7 @@ impl<'d> ControlButton<'d> {
         Ok(Self { button, state })
     }
     fn poll(&mut self) -> Option<ButtonEdge> {
-        let is_pressed: bool = self.button.is_low();
+        let is_pressed = self.button.is_low();
         if is_pressed != self.state {
             self.state = is_pressed;
             return Some(if is_pressed {
@@ -44,38 +47,100 @@ impl<'d> ControlButton<'d> {
 pub struct ButtonController<'d> {
     left: ControlButton<'d>,
     right: ControlButton<'d>,
+    left_pressed_at: Option<Instant>,
+    right_pressed_at: Option<Instant>,
     chord: bool,
+    shutdown_pending: bool,
+    waiting_for_release: bool,
 }
 
 impl<'d> ButtonController<'d> {
     pub fn init<L: InputPin + OutputPin + 'd, R: InputPin + OutputPin + 'd>(
         left: L,
         right: R,
+        waiting_for_release: bool,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             left: ControlButton::init(left)?,
             right: ControlButton::init(right)?,
+            left_pressed_at: None,
+            right_pressed_at: None,
             chord: false,
+            shutdown_pending: false,
+            waiting_for_release,
         })
     }
+
     pub fn poll(&mut self) -> Option<ButtonEvent> {
         let left_edge = self.left.poll();
         let right_edge = self.right.poll();
         let left_pressed = self.left.is_pressed();
         let right_pressed = self.right.is_pressed();
 
-        self.chord = self.chord || (left_pressed && right_pressed);
-        if self.chord && !left_pressed && !right_pressed {
-            self.chord = false;
-            return Some(ButtonEvent::Reset);
+        if matches!(left_edge, Some(ButtonEdge::Pressed)) {
+            self.left_pressed_at = Some(Instant::now());
         }
-        if self.chord {
+        if matches!(right_edge, Some(ButtonEdge::Pressed)) {
+            self.right_pressed_at = Some(Instant::now());
+        }
+
+        if self.waiting_for_release {
+            if !left_pressed && !right_pressed {
+                self.waiting_for_release = false;
+                self.clear_press_state();
+                log::info!("Wake button released; button input ready");
+            }
             return None;
         }
+
+        self.chord |= left_pressed && right_pressed;
+
+        let left_long = self.left_pressed_at.is_some_and(|started| {
+            started.elapsed() >= LONG_PRESS_DURATION
+                && (left_pressed || matches!(left_edge, Some(ButtonEdge::Released)))
+        });
+        let right_long = self.right_pressed_at.is_some_and(|started| {
+            started.elapsed() >= LONG_PRESS_DURATION
+                && (right_pressed || matches!(right_edge, Some(ButtonEdge::Released)))
+        });
+
+        if !self.shutdown_pending && (left_long || right_long) {
+            self.shutdown_pending = true;
+            log::info!("Long press detected; release button(s) to shut down");
+        }
+
+        if self.shutdown_pending {
+            if !left_pressed && !right_pressed {
+                self.clear_press_state();
+                return Some(ButtonEvent::Shutdown);
+            }
+            return None;
+        }
+
+        if self.chord {
+            if !left_pressed && !right_pressed {
+                self.clear_press_state();
+            }
+            return None;
+        }
+
         match (left_edge, right_edge) {
-            (Some(ButtonEdge::Released), _) => Some(ButtonEvent::Previous),
-            (_, Some(ButtonEdge::Released)) => Some(ButtonEvent::Next),
+            (Some(ButtonEdge::Released), _) => {
+                self.left_pressed_at = None;
+                Some(ButtonEvent::Previous)
+            }
+            (_, Some(ButtonEdge::Released)) => {
+                self.right_pressed_at = None;
+                Some(ButtonEvent::Next)
+            }
             _ => None,
         }
+    }
+
+    fn clear_press_state(&mut self) {
+        self.left_pressed_at = None;
+        self.right_pressed_at = None;
+        self.chord = false;
+        self.shutdown_pending = false;
     }
 }
