@@ -2,7 +2,6 @@ use crate::api::{Answer, ApiClient, Missing, Pages};
 use crate::display::{Scene, BORDER};
 use anyhow::Result;
 use embedded_graphics::prelude::Point;
-use std::time::{Duration, Instant};
 
 const SCREEN_SIZE: i32 = 200;
 const BOARD_SIZE: i32 = SCREEN_SIZE / 2;
@@ -14,7 +13,6 @@ const CONTENT_SIZE: usize = 27;
 const BOARD_CONTENT_SIZE: usize = 9;
 const PAGE_SIZE: usize = 27;
 const MULTIPLE_PAGE_SIZE: usize = 3;
-const REFRESH_INTERVAL_SECS: u64 = 30;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Step {
@@ -122,7 +120,6 @@ pub struct Layout<'a> {
     answer: Option<Answer>,
     uploaded: bool,
     answer_requested: bool,
-    last_refresh: Instant,
     boards: [Chessboard; 4],
     step: Step,
     position: usize,
@@ -150,13 +147,12 @@ impl<'a> Layout<'a> {
             answer: None,
             uploaded: false,
             answer_requested: false,
-            last_refresh: Instant::now(),
             boards,
             step: Step::Pages,
             position: 0,
             frame: 0,
         };
-        layout.render()?;
+        layout.render(true)?;
         Ok(layout)
     }
     pub fn next(&mut self) -> Result<()> {
@@ -165,12 +161,12 @@ impl<'a> Layout<'a> {
         }
         if self.step == Step::NonChoice && self.frame + 1 < self.non_frame_len(self.position) {
             self.frame += 1;
-            return self.render();
+            return self.render(false);
         }
         if self.position + 1 < self.step_len(self.step) {
             self.position += 1;
             self.frame = 0;
-            return self.render();
+            return self.render(false);
         }
         if let Some(step) = self.next_step() {
             if self.step == Step::Missing && step == Step::Single {
@@ -179,25 +175,25 @@ impl<'a> Layout<'a> {
             self.step = step;
             self.position = 0;
             self.frame = 0;
-            self.render()?;
+            self.render(false)?;
         }
         Ok(())
     }
     pub fn previous(&mut self) -> Result<()> {
         if self.step == Step::NonChoice && self.frame > 0 {
             self.frame -= 1;
-            return self.render();
+            return self.render(false);
         }
         if self.position > 0 {
             self.position -= 1;
             self.frame = self.non_frame_len(self.position).saturating_sub(1);
-            return self.render();
+            return self.render(false);
         }
         if let Some(step) = self.previous_step() {
             self.step = step;
             self.position = self.step_len(step).saturating_sub(1);
             self.frame = self.non_frame_len(self.position).saturating_sub(1);
-            self.render()?;
+            self.render(false)?;
         }
         Ok(())
     }
@@ -208,41 +204,29 @@ impl<'a> Layout<'a> {
         self.answer = None;
         self.uploaded = false;
         self.answer_requested = false;
-        self.last_refresh = Instant::now();
-        self.render()?;
+        self.render(false)?;
         self.client.reset()
     }
     pub fn check_sleep(&mut self) -> Result<()> {
         self.scene.check_sleep()
     }
-    pub fn refresh_if_due(&mut self) -> Result<()> {
-        if self.last_refresh.elapsed() < Duration::from_secs(REFRESH_INTERVAL_SECS) {
-            return Ok(());
-        }
-        self.last_refresh = Instant::now();
-        self.refresh_current()
-    }
-    fn refresh_current(&mut self) -> Result<()> {
+    pub fn refresh(&mut self) -> Result<()> {
         match self.step {
             Step::Pages => {
                 self.pages = self.client.get_pages()?;
                 self.clamp_position();
-                self.render()?;
             }
             Step::Missing => {
                 self.missing = self.client.get_missing()?;
                 self.clamp_position();
-                self.render()?;
             }
             _ if Self::is_answer_step(self.step) && self.uploaded && self.answer.is_none() => {
-                if self.refresh_answer()? {
-                    self.clamp_position();
-                    self.render()?;
-                }
+                self.refresh_answer()?;
+                self.clamp_position();
             }
             _ => {}
         }
-        Ok(())
+        self.render(true)
     }
     fn prepare_answer(&mut self) -> Result<()> {
         if !self.uploaded {
@@ -251,7 +235,6 @@ impl<'a> Layout<'a> {
         }
         if !self.answer_requested && self.answer.is_none() {
             self.refresh_answer()?;
-            self.last_refresh = Instant::now();
         }
         Ok(())
     }
@@ -337,7 +320,7 @@ impl<'a> Layout<'a> {
     fn missing_count(&self) -> usize {
         self.missing.values().map(Vec::len).sum()
     }
-    fn render(&mut self) -> Result<()> {
+    fn render(&mut self, full_refresh: bool) -> Result<()> {
         self.scene.clear()?;
         self.boards
             .iter()
@@ -350,7 +333,11 @@ impl<'a> Layout<'a> {
             Step::Binary => self.render_binary()?,
             Step::NonChoice => self.render_non_choice()?,
         }
-        self.scene.refresh()
+        if full_refresh {
+            self.scene.full_refresh()
+        } else {
+            self.scene.refresh()
+        }
     }
     fn render_pages(&mut self) -> Result<()> {
         let start = self.position * PAGE_SIZE + 1;

@@ -69,8 +69,12 @@ fn main() -> Result<()> {
             match event {
                 ButtonEvent::Previous => layout.previous()?,
                 ButtonEvent::Next => layout.next()?,
+                ButtonEvent::Refresh => {
+                    log::info!("Long press -> refresh current page");
+                    layout.refresh()?;
+                }
                 ButtonEvent::Shutdown => {
-                    log::info!("Long press -> reset server and deep sleep");
+                    log::info!("Left long press -> reset server and deep sleep");
                     match layout.reset() {
                         Ok(()) => enter_deep_sleep()?,
                         Err(err) => {
@@ -80,7 +84,6 @@ fn main() -> Result<()> {
                 }
             }
         }
-        layout.refresh_if_due()?;
         layout.check_sleep()?;
         thread::sleep(Duration::from_millis(50));
     }
