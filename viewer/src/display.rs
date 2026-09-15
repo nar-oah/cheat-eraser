@@ -115,11 +115,8 @@ impl<'a> Scene<'a> {
                 .set_lut(&mut self.spi, &mut FreeRtos, Some(RefreshLut::Quick))?;
             self.refresh_lut = RefreshLut::Quick;
         }
-        self.epd.update_and_display_frame(
-            &mut self.spi,
-            self.display.buffer(),
-            &mut FreeRtos,
-        )?;
+        self.epd
+            .update_and_display_frame(&mut self.spi, self.display.buffer(), &mut FreeRtos)?;
         Ok(())
     }
     pub fn full_refresh(&mut self) -> Result<()> {
@@ -130,11 +127,7 @@ impl<'a> Scene<'a> {
             self.refresh_lut = RefreshLut::Full;
         }
         self.epd
-            .update_and_display_frame(
-                &mut self.spi,
-                self.display.buffer(),
-                &mut FreeRtos,
-            )?;
+            .update_and_display_frame(&mut self.spi, self.display.buffer(), &mut FreeRtos)?;
         Ok(())
     }
     pub fn clear(&mut self) -> Result<()> {
