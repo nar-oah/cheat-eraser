@@ -26,7 +26,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.3
+    version: 5.3.3
 direct_dependencies:
 - espressif/esp32-camera
 manifest_hash: 5902b4e97a0155b366f0dfb7c42ed0a8614e293f904f65b9fd756693608c7bd1
