@@ -75,9 +75,7 @@ fn main() -> anyhow::Result<()> {
         if waiting_for_release {
             if is_pressed {
                 released_at = None;
-            } else if released_at
-                .get_or_insert_with(Instant::now)
-                .elapsed()
+            } else if released_at.get_or_insert_with(Instant::now).elapsed()
                 >= RELEASE_STABLE_DURATION
             {
                 waiting_for_release = false;
@@ -97,8 +95,7 @@ fn main() -> anyhow::Result<()> {
                     pressed_at = Some(Instant::now());
                 }
             } else if is_long_press
-                || pressed_at
-                    .is_some_and(|started| started.elapsed() >= LONG_PRESS_DURATION)
+                || pressed_at.is_some_and(|started| started.elapsed() >= LONG_PRESS_DURATION)
             {
                 is_long_press = true;
                 released_at = Some(Instant::now());

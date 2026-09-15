@@ -145,10 +145,7 @@ impl<'d> ButtonController<'d> {
             self.released_at = None;
             return false;
         }
-        self.released_at
-            .get_or_insert_with(Instant::now)
-            .elapsed()
-            >= RELEASE_STABLE_DURATION
+        self.released_at.get_or_insert_with(Instant::now).elapsed() >= RELEASE_STABLE_DURATION
     }
 
     fn clear_press_state(&mut self) {
