@@ -102,10 +102,16 @@ impl<'a> Scene<'a> {
         self.active_time = Instant::now();
         Ok(())
     }
+    pub fn sleep_now(&mut self) -> Result<()> {
+        if !self.is_sleep {
+            self.epd.sleep(&mut self.spi, &mut FreeRtos)?;
+            self.is_sleep = true;
+        }
+        Ok(())
+    }
     pub fn check_sleep(&mut self) -> Result<()> {
         if !self.is_sleep && self.active_time.elapsed() > Duration::from_secs(60) {
-            self.epd.sleep(&mut self.spi, &mut FreeRtos)?;
-            self.is_sleep = true
+            self.sleep_now()?;
         }
         Ok(())
     }
