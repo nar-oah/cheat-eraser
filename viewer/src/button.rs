@@ -116,6 +116,9 @@ impl<'d> ButtonController<'d> {
             } else {
                 None
             };
+            if let Some(event) = self.pending_event {
+                log::info!("Long press detected; release button(s) for {:?}", event);
+            }
         }
 
         if let Some(event) = self.pending_event {
