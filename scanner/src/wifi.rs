@@ -39,9 +39,10 @@ pub fn connect(
     let subscription = sys_loop.subscribe::<WifiEvent, _>(|event| {
         if let WifiEvent::StaDisconnected(info) = event {
             log::warn!(
-                "WiFi disconnected: reason={}, rssi={}. Reconnecting...",
+                "WiFi disconnected: reason={}, rssi={}, bssid={:02x?}. Reconnecting...",
                 info.reason(),
-                info.rssi()
+                info.rssi(),
+                info.bssid()
             );
             if let Err(err) =
                 esp_idf_svc::sys::esp!(unsafe { esp_idf_svc::sys::esp_wifi_connect() })
