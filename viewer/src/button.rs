@@ -8,6 +8,7 @@ const RELEASE_STABLE_DURATION: Duration = Duration::from_millis(100);
 pub enum ButtonEvent {
     Previous,
     Next,
+    Refresh,
     Shutdown,
 }
 
@@ -51,7 +52,7 @@ pub struct ButtonController<'d> {
     left_pressed_at: Option<Instant>,
     right_pressed_at: Option<Instant>,
     chord: bool,
-    shutdown_pending: bool,
+    pending_event: Option<ButtonEvent>,
     waiting_for_release: bool,
     released_at: Option<Instant>,
 }
@@ -68,7 +69,7 @@ impl<'d> ButtonController<'d> {
             left_pressed_at: None,
             right_pressed_at: None,
             chord: false,
-            shutdown_pending: false,
+            pending_event: None,
             waiting_for_release,
             released_at: None,
         })
@@ -107,15 +108,20 @@ impl<'d> ButtonController<'d> {
                 && (right_pressed || matches!(right_edge, Some(ButtonEdge::Released)))
         });
 
-        if !self.shutdown_pending && (left_long || right_long) {
-            self.shutdown_pending = true;
-            log::info!("Long press detected; release button(s) to shut down");
+        if self.pending_event.is_none() {
+            self.pending_event = if left_long {
+                Some(ButtonEvent::Shutdown)
+            } else if right_long {
+                Some(ButtonEvent::Refresh)
+            } else {
+                None
+            };
         }
 
-        if self.shutdown_pending {
+        if let Some(event) = self.pending_event {
             if self.release_is_stable(!left_pressed && !right_pressed) {
                 self.clear_press_state();
-                return Some(ButtonEvent::Shutdown);
+                return Some(event);
             }
             return None;
         }
@@ -152,7 +158,7 @@ impl<'d> ButtonController<'d> {
         self.left_pressed_at = None;
         self.right_pressed_at = None;
         self.chord = false;
-        self.shutdown_pending = false;
+        self.pending_event = None;
         self.released_at = None;
     }
 }
