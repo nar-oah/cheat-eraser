@@ -125,9 +125,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "camino"
-version = "1.2.6"
+version = "1.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591"
+checksum = "bb1307f12aa967b5a58416e87b3653360e0fd614a016b6e970db08fecbb1b80d"
 dependencies = [
  "serde_core",
 ]
@@ -384,16 +384,16 @@ checksum = "dc2d050bdc5c21e0862a89256ed8029ae6c290a93aecefc73084b3002cdebb01"
 
 [[package]]
 name = "embassy-sync"
-version = "0.8.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bbd85cf5a5ae56bdf26f618364af642d1d0a4e245cdd75cd9aabda382f65a81"
+checksum = "73974a3edbd0bd286759b3d483540f0ebef705919a5f56f4fc7709066f71689b"
 dependencies = [
  "cfg-if",
  "critical-section",
- "embedded-io-async",
+ "embedded-io-async 0.6.1",
  "futures-core",
  "futures-sink",
- "heapless",
+ "heapless 0.8.0",
 ]
 
 [[package]]
@@ -429,7 +429,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "168297bf80aaf114b3c9ad589bf38b01b3009b9af7f97cd18086c5bbf96f5693"
 dependencies = [
  "embassy-executor-timer-queue",
- "heapless",
+ "heapless 0.9.3",
 ]
 
 [[package]]
@@ -478,9 +478,24 @@ dependencies = [
 
 [[package]]
 name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+[[package]]
+name = "embedded-io"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
+
+[[package]]
+name = "embedded-io-async"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ff09972d4073aa8c299395be75161d582e7629cd663171d62af73c8d50dba3f"
+dependencies = [
+ "embedded-io 0.6.1",
+]
 
 [[package]]
 name = "embedded-io-async"
@@ -488,7 +503,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0"
 dependencies = [
- "embedded-io",
+ "embedded-io 0.7.1",
 ]
 
 [[package]]
@@ -498,10 +513,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bfc6d05bac4af70b0795d1f1b6ddd44aa85ad04b05d34d64b1b9fce36de107e"
 dependencies = [
  "defmt",
- "embedded-io",
- "embedded-io-async",
+ "embedded-io 0.7.1",
+ "embedded-io-async 0.7.0",
  "enumset",
- "heapless",
+ "heapless 0.9.3",
  "num_enum",
  "serde",
  "strum 0.27.2",
@@ -581,7 +596,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-hal"
 version = "0.46.2"
-source = "git+https://github.com/esp-rs/esp-idf-hal.git#5a09cb5924b13cb1752345406cfc07ae43e6d927"
+source = "git+https://github.com/esp-rs/esp-idf-hal.git#67e2d0f699684b6d5e38d71dfb3cb4d4cea8df90"
 dependencies = [
  "atomic-waker",
  "critical-section",
@@ -591,12 +606,12 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-hal-nb",
- "embedded-io",
- "embedded-io-async",
+ "embedded-io 0.7.1",
+ "embedded-io-async 0.7.0",
  "embuild",
  "enumset",
  "esp-idf-sys",
- "heapless",
+ "heapless 0.9.3",
  "log",
  "nb 1.1.0",
 ]
@@ -604,7 +619,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-svc"
 version = "0.52.1"
-source = "git+https://github.com/esp-rs/esp-idf-svc.git#6292a2f9a041c6f1370c66678f360c164aef93a3"
+source = "git+https://github.com/esp-rs/esp-idf-svc.git#81d64e2b23d8f1984e137e3b9760054e4d2e90e8"
 dependencies = [
  "embassy-futures",
  "embassy-time-driver",
@@ -615,7 +630,7 @@ dependencies = [
  "enumset",
  "esp-idf-hal",
  "futures-io",
- "heapless",
+ "heapless 0.9.3",
  "log",
  "num_enum",
  "uncased",
@@ -624,7 +639,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-sys"
 version = "0.37.2"
-source = "git+https://github.com/esp-rs/esp-idf-sys.git#de5bffb3b12a33cbf2cd34fef0b21f36d1ddefa7"
+source = "git+https://github.com/esp-rs/esp-idf-sys.git#33045844f467fb8c66dfd78c3cacb0e218c3d26a"
 dependencies = [
  "anyhow",
  "build-time",
@@ -775,6 +790,16 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
+name = "heapless"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+dependencies = [
+ "hash32",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "heapless"
