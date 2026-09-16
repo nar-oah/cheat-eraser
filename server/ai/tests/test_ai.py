@@ -39,3 +39,18 @@ def test_new_answer_request_clears_previous_answer(monkeypatch):
     value.get_answer([b"new paper"])
 
     assert value.answer is None
+
+
+def test_formula_out_of_range_returns_none():
+    value = ai_module.Ai()
+    value.answer = Answer.model_validate(
+        {
+            "single_choice": [],
+            "multiple_choice": [],
+            "binary_choice": [],
+            "non_choice": [{"answer": "text", "english": [], "math": []}],
+        }
+    )
+
+    assert value.get_formula((0, 0)) is None
+    assert value.get_formula((-1, 0)) is None
