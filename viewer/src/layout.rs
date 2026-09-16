@@ -1,4 +1,5 @@
 use crate::api::{Answer, AnswerState, ApiClient, Missing, Pages};
+use crate::api_core::formula_api_position;
 use crate::display::{Scene, BORDER};
 use anyhow::Result;
 use embedded_graphics::prelude::Point;
@@ -468,7 +469,8 @@ impl<'a> Layout<'a> {
             }
             NonFrame::Formula(index) => {
                 self.draw_content_chars("$")?;
-                if let Some(logo) = self.client.get_formula((self.position as u8 + 1, index))? {
+                let position = formula_api_position(self.position as u8, index);
+                if let Some(logo) = self.client.get_formula(position)? {
                     self.scene.mod_logo(logo)?;
                 }
             }
