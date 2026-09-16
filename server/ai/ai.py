@@ -13,6 +13,7 @@ class Ai:
         self.answer: Optional[Answer] = None
 
     def get_answer(self, images: List[bytes]) -> None:
+        self.answer = None
         client = genai.Client()
         response = client.models.generate_content(
             model="gemini-3.5-flash",
