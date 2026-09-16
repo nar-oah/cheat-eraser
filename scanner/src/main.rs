@@ -1,6 +1,6 @@
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::peripherals::Peripherals;
-use std::sync::mpsc;
+use std::sync::mpsc::{self, TrySendError};
 use std::thread;
 use std::time::{Duration, Instant};
 mod camera;
@@ -54,7 +54,7 @@ fn main() -> anyhow::Result<()> {
     let mut waiting_for_release = woke_from_deep_sleep;
     let mut released_at: Option<Instant> = None;
 
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(1);
     thread::Builder::new()
         .stack_size(1024 * 10)
         .spawn(move || {
@@ -62,7 +62,16 @@ fn main() -> anyhow::Result<()> {
             while let Ok(data) = rx.recv() {
                 log::info!("Background thread: received image, uploading...");
                 match upload::image(data) {
-                    Ok(_) => log::info!("Upload successful!"),
+                    Ok(result) if result.accepted => log::info!(
+                        "Paper accepted: page={:?}, variance={:?}",
+                        result.page,
+                        result.variance
+                    ),
+                    Ok(result) => log::warn!(
+                        "HTTP upload succeeded, but paper was rejected: reason={}, variance={:?}",
+                        result.reject_reason.as_deref().unwrap_or("unknown"),
+                        result.variance
+                    ),
                     Err(e) => log::error!("Upload failed: {:?}", e),
                 }
                 log::info!("Background thread: ready for next task");
@@ -108,7 +117,17 @@ fn main() -> anyhow::Result<()> {
                 if let Some(frame) = camera::CameraFrame::get() {
                     let data = frame.data().to_vec();
                     log::info!("Picture taken! Size: {} bytes. Uploading...", data.len());
-                    tx.send(data).unwrap()
+                    match tx.try_send(data) {
+                        Ok(()) => log::info!("Image queued for upload"),
+                        Err(TrySendError::Full(data)) => {
+                            drop(data);
+                            log::warn!("Upload queue busy; dropped newly captured image");
+                        }
+                        Err(TrySendError::Disconnected(data)) => {
+                            drop(data);
+                            log::error!("Upload thread stopped; dropped newly captured image");
+                        }
+                    }
                 } else {
                     log::error!("Camera Capture Failed");
                 }

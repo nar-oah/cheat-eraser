@@ -1,8 +1,19 @@
 use anyhow::{bail, Result};
 use esp_idf_svc::http::client::{Configuration, EspHttpConnection, Method};
+use serde::Deserialize;
 use std::time::Duration;
 
-pub fn image(image_data: Vec<u8>) -> Result<()> {
+const MAX_RESPONSE_SIZE: usize = 4096;
+
+#[derive(Debug, Deserialize)]
+pub struct PreCheckResponse {
+    pub accepted: bool,
+    pub page: Option<u32>,
+    pub variance: Option<f64>,
+    pub reject_reason: Option<String>,
+}
+
+pub fn image(image_data: Vec<u8>) -> Result<PreCheckResponse> {
     let url = "https://aws.naroah.top/cheat/pre-check";
     let config = Configuration {
         use_global_ca_store: true,
@@ -39,13 +50,21 @@ pub fn image(image_data: Vec<u8>) -> Result<()> {
 
     let status = connection.status();
     if (200..300).contains(&status) {
-        log::info!("Upload Success! Status: {}", status);
+        log::info!("HTTP image upload successful: endpoint={}, status={}", url, status);
         let mut buffer = [0u8; 512];
-        let bytes_read = connection.read(&mut buffer)?;
-        let response_text = std::str::from_utf8(&buffer[..bytes_read])?.to_string();
-        log::info!("uuid:{}", response_text);
-        Ok(())
+        let mut response = Vec::new();
+        loop {
+            let bytes_read = connection.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+            if response.len() + bytes_read > MAX_RESPONSE_SIZE {
+                bail!("Pre-check response exceeded {} bytes", MAX_RESPONSE_SIZE);
+            }
+            response.extend_from_slice(&buffer[..bytes_read]);
+        }
+        Ok(serde_json::from_slice(&response)?)
     } else {
-        bail!("Server returned error: {}", status)
+        bail!("Server returned error for {}: {}", url, status)
     }
 }
