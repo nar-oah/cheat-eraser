@@ -142,12 +142,15 @@ fn main() -> anyhow::Result<()> {
     let sync_ready = Arc::clone(&ready);
     let sync_shutting_down = Arc::clone(&shutting_down);
     let sync_request_lock = Arc::clone(&status_request_lock);
-    thread::Builder::new()
+    if let Err(error) = thread::Builder::new()
         .stack_size(1024 * 10)
         .spawn(move || {
             log::info!("Scanner status thread started");
             run_status_sync(sync_ready, sync_shutting_down, status_rx, sync_request_lock);
-        })?;
+        })
+    {
+        log::warn!("Scanner status thread failed to start: {:?}", error);
+    }
 
     loop {
         let is_pressed = button.is_low();
