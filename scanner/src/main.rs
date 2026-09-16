@@ -103,10 +103,12 @@ fn main() -> anyhow::Result<()> {
     let ready = Arc::new(AtomicBool::new(true));
     let shutting_down = Arc::new(AtomicBool::new(false));
     let (status_tx, status_rx) = mpsc::channel::<bool>();
+    let state_lock = Arc::new(Mutex::new(()));
     let status_request_lock = Arc::new(Mutex::new(()));
     let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(1);
     let upload_ready = Arc::clone(&ready);
     let upload_shutting_down = Arc::clone(&shutting_down);
+    let upload_state_lock = Arc::clone(&state_lock);
     let upload_status_tx = status_tx.clone();
     thread::Builder::new()
         .stack_size(1024 * 10)
@@ -128,14 +130,13 @@ fn main() -> anyhow::Result<()> {
                     Err(e) => log::error!("Upload failed: {:?}", e),
                 }
                 log::info!("Background thread: ready for next task");
-                if !upload_shutting_down.load(Ordering::SeqCst) {
-                    upload_ready.store(true, Ordering::SeqCst);
-                    if upload_shutting_down.load(Ordering::SeqCst) {
-                        upload_ready.store(false, Ordering::SeqCst);
-                        send_status_change(&upload_status_tx, false);
-                    } else {
+                match upload_state_lock.lock() {
+                    Ok(_guard) if !upload_shutting_down.load(Ordering::SeqCst) => {
+                        upload_ready.store(true, Ordering::SeqCst);
                         send_status_change(&upload_status_tx, true);
                     }
+                    Ok(_) => {}
+                    Err(_) => log::warn!("Scanner state lock is unavailable"),
                 }
             }
         })?;
@@ -182,13 +183,20 @@ fn main() -> anyhow::Result<()> {
                 log::info!("Long press released; waiting for stable button state");
             } else if pressed_at.is_some() {
                 log::info!("Short press -> capture");
-                if ready
-                    .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-                    .is_err()
-                {
+                let capture_reserved = match state_lock.lock() {
+                    Ok(_guard) if !shutting_down.load(Ordering::SeqCst) => ready
+                        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+                        .map(|_| send_status_change(&status_tx, false))
+                        .is_ok(),
+                    Ok(_) => false,
+                    Err(_) => {
+                        log::warn!("Scanner state lock is unavailable");
+                        false
+                    }
+                };
+                if !capture_reserved {
                     log::warn!("Scanner busy; capture ignored");
                 } else {
-                    send_status_change(&status_tx, false);
                     let free = unsafe { esp_idf_sys::esp_get_free_heap_size() };
                     log::info!("Current Free Heap: {} bytes", free);
 
@@ -206,8 +214,14 @@ fn main() -> anyhow::Result<()> {
                         }
                     } else {
                         log::error!("Camera Capture Failed");
-                        ready.store(true, Ordering::SeqCst);
-                        send_status_change(&status_tx, true);
+                        match state_lock.lock() {
+                            Ok(_guard) if !shutting_down.load(Ordering::SeqCst) => {
+                                ready.store(true, Ordering::SeqCst);
+                                send_status_change(&status_tx, true);
+                            }
+                            Ok(_) => {}
+                            Err(_) => log::warn!("Scanner state lock is unavailable"),
+                        }
                     }
                 }
             }
@@ -226,9 +240,14 @@ fn main() -> anyhow::Result<()> {
             && !is_pressed
             && released_at.is_some_and(|started| started.elapsed() >= RELEASE_STABLE_DURATION)
         {
-            shutting_down.store(true, Ordering::SeqCst);
-            ready.store(false, Ordering::SeqCst);
-            send_status_change(&status_tx, false);
+            match state_lock.lock() {
+                Ok(_guard) => {
+                    shutting_down.store(true, Ordering::SeqCst);
+                    ready.store(false, Ordering::SeqCst);
+                    send_status_change(&status_tx, false);
+                }
+                Err(_) => log::warn!("Scanner state lock is unavailable"),
+            }
             report_status(false, &shutting_down, &status_request_lock);
             enter_deep_sleep()?;
         }
