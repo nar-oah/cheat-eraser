@@ -50,7 +50,7 @@ const URL: &str = "https://aws.naroah.top/cheat/";
 | `/pages` | GET | 已识别页码数组，例如 `[1, 2, 4]` |
 | `/missing` | GET | 缺失题目映射，例如 `{"单": [3, 8], "多": [2]}` |
 | `/answer` | GET | AI 状态以及生成完成后的答案数据 |
-| `/formula` | POST | 请求体为 `[题号, 公式序号]`；成功返回 `image/bmp`，无结果返回 204 |
+| `/formula` | POST | 请求体为从 0 开始的 `[非选择题索引, 公式索引]`；成功返回 `image/bmp`，无结果返回 204 |
 | `/reset` | POST | 重置后端状态 |
 
 `/answer` 的 JSON 结构对应 `src/api.rs` 中的 `Answer`：

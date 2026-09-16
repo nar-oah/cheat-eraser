@@ -82,7 +82,7 @@ Swagger 文档位于 `http://127.0.0.1:8000/docs`。
 2. `GET /pages` 与 `GET /missing` 轮询当前扫描状态。
 3. `POST /upload` 清除旧答案缓存，并把当前已收集页面提交给 AI worker。
 4. `GET /answer` 返回 `pending`、`ready` 或 `error` 状态；`ready` 时 `answer` 包含答案，`error` 时 `error` 包含失败原因。
-5. `POST /formula` 以 `[非选择题索引, 公式索引]` 请求公式图片；成功返回原始 `image/bmp`，无结果返回 204。
+5. `POST /formula` 以从 0 开始的 `[非选择题索引, 公式索引]` 请求公式图片；成功返回原始 `image/bmp`，无结果返回 204。
 6. `POST /reset` 将当前页面写入 `backup/`，并清空试卷、AI 任务和答案状态。
 
 `/answer` 响应示例：
