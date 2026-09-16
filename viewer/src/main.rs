@@ -90,6 +90,7 @@ fn main() -> Result<()> {
                 }
             }
         }
+        layout.poll_scanner_status()?;
         layout.check_sleep()?;
         thread::sleep(Duration::from_millis(50));
     }

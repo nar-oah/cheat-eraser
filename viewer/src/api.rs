@@ -1,4 +1,4 @@
-use crate::api_core::{check_status, parse_answer, read_bounded};
+use crate::api_core::{check_status, parse_answer, parse_scanner_status, read_bounded};
 pub use crate::api_core::{Answer, AnswerState};
 use anyhow::{bail, Context, Result};
 use embedded_svc::http::client::Client;
@@ -50,6 +50,10 @@ impl ApiClient {
     pub fn get_answer(&mut self) -> Result<AnswerState> {
         let bytes = self.get_bytes("answer")?;
         parse_answer(&bytes)
+    }
+    pub fn get_scanner_status(&mut self) -> Result<bool> {
+        let bytes = self.get_bytes("scanner/status")?;
+        parse_scanner_status(&bytes)
     }
 
     fn post_request(&mut self, endpoint: &str) -> Result<()> {
