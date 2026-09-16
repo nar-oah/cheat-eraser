@@ -40,9 +40,11 @@ uv sync --all-packages --locked
 
 ```dotenv
 GEMINI_API_KEY=your-api-key
+EXPECTED_QUESTION_RANGES={"一":[1,10],"二":[11,20]}
 ```
 
 也可使用 `GOOGLE_API_KEY`；两者同时存在时 Google SDK 优先读取 `GOOGLE_API_KEY`。
+`EXPECTED_QUESTION_RANGES` 按大题名配置闭区间题号，用于检测每个大题首题、末题以及整段缺失；请在正式测试前替换为实际试卷范围，留空为 `{}` 时只检测已识别首尾之间的缺题。
 
 ## 本地启动
 
@@ -76,12 +78,29 @@ Swagger 文档位于 `http://127.0.0.1:8000/docs`。
 
 ## 接口流程
 
-1. `POST /pre-check` 上传字段名为 `file` 的试卷图片。
+1. `POST /pre-check` 上传字段名为 `file` 的试卷图片，并在当前请求内完成预处理/OCR；响应包含 `accepted`、`page`、`variance` 和 `reject_reason`。
 2. `GET /pages` 与 `GET /missing` 轮询当前扫描状态。
-3. `POST /upload` 提交已收集页面给 AI worker。
-4. `GET /answer` 轮询答案；生成完成前返回 `null`。
-5. `POST /formula` 以 `[非选择题索引, 公式索引]` 请求公式图片。
-6. `POST /reset` 将当前页面写入 `backup/` 后重置试卷。
+3. `POST /upload` 清除旧答案缓存，并把当前已收集页面提交给 AI worker。
+4. `GET /answer` 返回 `pending`、`ready` 或 `error` 状态；`ready` 时 `answer` 包含答案，`error` 时 `error` 包含失败原因。
+5. `POST /formula` 以 `[非选择题索引, 公式索引]` 请求公式图片；成功返回原始 `image/bmp`，无结果返回 204。
+6. `POST /reset` 将当前页面写入 `backup/`，并清空试卷、AI 任务和答案状态。
+
+`/answer` 响应示例：
+
+```json
+{
+  "status": "ready",
+  "answer": {
+    "single_choice": ["A"],
+    "multiple_choice": ["AC"],
+    "binary_choice": [true],
+    "non_choice": [
+      {"answer": "文字答案$", "english": [], "math": 1}
+    ]
+  },
+  "error": null
+}
+```
 
 ## Docker 与生产部署
 
