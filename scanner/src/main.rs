@@ -14,11 +14,7 @@ const LONG_PRESS_DURATION: Duration = Duration::from_millis(2500);
 const RELEASE_STABLE_DURATION: Duration = Duration::from_millis(100);
 const STATUS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
-fn report_status(
-    ready: bool,
-    shutting_down: &AtomicBool,
-    request_lock: &Mutex<()>,
-) {
+fn report_status(ready: bool, shutting_down: &AtomicBool, request_lock: &Mutex<()>) {
     let Ok(_guard) = request_lock.lock() else {
         log::warn!("Scanner status request lock is unavailable");
         return;
@@ -39,11 +35,7 @@ fn run_status_sync(
     loop {
         let now = Instant::now();
         if now >= next_heartbeat {
-            report_status(
-                ready.load(Ordering::SeqCst),
-                &shutting_down,
-                &request_lock,
-            );
+            report_status(ready.load(Ordering::SeqCst), &shutting_down, &request_lock);
             next_heartbeat += STATUS_HEARTBEAT_INTERVAL;
             while next_heartbeat <= Instant::now() {
                 next_heartbeat += STATUS_HEARTBEAT_INTERVAL;
@@ -154,12 +146,7 @@ fn main() -> anyhow::Result<()> {
         .stack_size(1024 * 10)
         .spawn(move || {
             log::info!("Scanner status thread started");
-            run_status_sync(
-                sync_ready,
-                sync_shutting_down,
-                status_rx,
-                sync_request_lock,
-            );
+            run_status_sync(sync_ready, sync_shutting_down, status_rx, sync_request_lock);
         })?;
 
     loop {
@@ -212,7 +199,9 @@ fn main() -> anyhow::Result<()> {
                             Ok(()) => log::info!("Image queued for upload"),
                             Err(error) => {
                                 drop(error.0);
-                                log::error!("Upload thread stopped; captured image was not uploaded");
+                                log::error!(
+                                    "Upload thread stopped; captured image was not uploaded"
+                                );
                             }
                         }
                     } else {
