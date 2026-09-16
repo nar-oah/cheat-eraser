@@ -27,6 +27,13 @@ pub enum AnswerState {
     Error { error: String },
 }
 
+#[derive(Debug, PartialEq)]
+pub enum NonChoicePart {
+    Text(String),
+    Formula(u8),
+    English(String),
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum AnswerStatus {
@@ -92,6 +99,71 @@ pub fn parse_answer(bytes: &[u8]) -> Result<AnswerState> {
 
 pub fn formula_api_position(question_index: u8, formula_number: u8) -> (u8, u8) {
     (question_index, formula_number.saturating_sub(1))
+}
+
+pub fn parse_non_choice(answer: &str, english: &[String], math: u8) -> Vec<NonChoicePart> {
+    let mut parts = Vec::new();
+    let mut text = String::new();
+    let mut cursor = 0;
+    let mut text_start = 0;
+    while let Some(offset) = answer[cursor..].find('$') {
+        let start = cursor + offset;
+        let Some((end_char, is_formula)) =
+            answer
+                .as_bytes()
+                .get(start + 1)
+                .and_then(|kind| match kind {
+                    b'(' => Some((b')', true)),
+                    b'[' => Some((b']', false)),
+                    _ => None,
+                })
+        else {
+            cursor = start + 1;
+            continue;
+        };
+        let number_start = start + 2;
+        let Some(end_offset) = answer[number_start..]
+            .as_bytes()
+            .iter()
+            .position(|value| *value == end_char)
+        else {
+            cursor = start + 1;
+            continue;
+        };
+        let end = number_start + end_offset;
+        let number_text = &answer[number_start..end];
+        if number_text.is_empty() || !number_text.bytes().all(|value| value.is_ascii_digit()) {
+            cursor = start + 1;
+            continue;
+        }
+
+        text.push_str(&answer[text_start..start]);
+        let number = number_text.parse::<usize>().ok();
+        let part = if is_formula {
+            number
+                .filter(|number| *number > 0 && *number <= math as usize)
+                .map(|number| NonChoicePart::Formula(number as u8))
+        } else {
+            number
+                .and_then(|number| number.checked_sub(1))
+                .and_then(|index| english.get(index))
+                .cloned()
+                .map(NonChoicePart::English)
+        };
+        if let Some(part) = part {
+            if !text.is_empty() {
+                parts.push(NonChoicePart::Text(std::mem::take(&mut text)));
+            }
+            parts.push(part);
+        }
+        text_start = end + 1;
+        cursor = text_start;
+    }
+    text.push_str(&answer[text_start..]);
+    if !text.is_empty() {
+        parts.push(NonChoicePart::Text(text));
+    }
+    parts
 }
 
 #[cfg(test)]
@@ -175,5 +247,65 @@ mod tests {
     fn maps_formula_number_to_zero_based_api_position() {
         assert_eq!(formula_api_position(2, 1), (2, 0));
         assert_eq!(formula_api_position(2, 3), (2, 2));
+    }
+
+    #[test]
+    fn parses_plain_non_choice_text() {
+        assert_eq!(
+            parse_non_choice("纯文本", &[], 0),
+            vec![NonChoicePart::Text("纯文本".to_string())]
+        );
+    }
+
+    #[test]
+    fn parses_single_formula_placeholder() {
+        assert_eq!(
+            parse_non_choice("前$(1)后", &[], 1),
+            vec![
+                NonChoicePart::Text("前".to_string()),
+                NonChoicePart::Formula(1),
+                NonChoicePart::Text("后".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_single_english_placeholder() {
+        assert_eq!(
+            parse_non_choice("前$[1]后", &["answer".to_string()], 0),
+            vec![
+                NonChoicePart::Text("前".to_string()),
+                NonChoicePart::English("answer".to_string()),
+                NonChoicePart::Text("后".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_mixed_formula_and_english_placeholders_in_order() {
+        assert_eq!(
+            parse_non_choice("甲$(2)乙$[1]丙$(1)丁", &["english".to_string()], 2,),
+            vec![
+                NonChoicePart::Text("甲".to_string()),
+                NonChoicePart::Formula(2),
+                NonChoicePart::Text("乙".to_string()),
+                NonChoicePart::English("english".to_string()),
+                NonChoicePart::Text("丙".to_string()),
+                NonChoicePart::Formula(1),
+                NonChoicePart::Text("丁".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn safely_degrades_invalid_and_out_of_range_placeholders() {
+        assert_eq!(
+            parse_non_choice("前$(2)中$[2]后", &["only".to_string()], 1),
+            vec![NonChoicePart::Text("前中后".to_string())]
+        );
+        assert_eq!(
+            parse_non_choice("前$(x)后", &[], 0),
+            vec![NonChoicePart::Text("前$(x)后".to_string())]
+        );
     }
 }

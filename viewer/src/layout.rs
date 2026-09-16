@@ -1,5 +1,5 @@
 use crate::api::{Answer, AnswerState, ApiClient, Missing, Pages};
-use crate::api_core::formula_api_position;
+use crate::api_core::{formula_api_position, parse_non_choice, NonChoicePart};
 use crate::display::{Scene, BORDER};
 use anyhow::Result;
 use embedded_graphics::prelude::Point;
@@ -28,6 +28,7 @@ enum Step {
 enum NonFrame {
     Text(String),
     Formula(u8),
+    English(String),
 }
 
 fn get_point(start: Point, index: i32) -> Point {
@@ -225,7 +226,13 @@ impl<'a> Layout<'a> {
                 self.clamp_position();
             }
             _ if Self::is_answer_step(self.step) && self.uploaded && self.answer.is_none() => {
-                self.refresh_answer()?;
+                if self.answer_error.is_some() {
+                    self.client.upload()?;
+                    self.answer_error = None;
+                    self.answer_requested = false;
+                } else {
+                    self.refresh_answer()?;
+                }
                 self.clamp_position();
             }
             _ => {}
@@ -455,17 +462,16 @@ impl<'a> Layout<'a> {
         }
         let word = &answer.non_choice[self.position];
         let answer = word.answer.clone();
-        let english = word.english.join(" ");
+        let english = word.english.clone();
         let math = word.math;
         let frame = self
-            .non_frames(&answer, math)
+            .non_frames(&answer, &english, math)
             .into_iter()
             .nth(self.frame)
             .unwrap_or(NonFrame::Text(String::new()));
         match frame {
             NonFrame::Text(text) => {
                 self.draw_content_chars(&text)?;
-                self.draw_logo_text(&english)?;
             }
             NonFrame::Formula(index) => {
                 self.draw_content_chars("$")?;
@@ -473,6 +479,10 @@ impl<'a> Layout<'a> {
                 if let Some(logo) = self.client.get_formula(position)? {
                     self.scene.mod_logo(logo)?;
                 }
+            }
+            NonFrame::English(text) => {
+                self.draw_content_chars("$")?;
+                self.draw_logo_text(&text)?;
             }
         }
         self.boards[3].draw_location(&mut self.scene, "非", self.position + 1)
@@ -532,29 +542,24 @@ impl<'a> Layout<'a> {
         self.answer
             .as_ref()
             .and_then(|answer| answer.non_choice.get(position))
-            .map(|word| self.non_frames(&word.answer, word.math).len())
+            .map(|word| {
+                self.non_frames(&word.answer, &word.english, word.math)
+                    .len()
+            })
             .unwrap_or(1)
             .max(1)
     }
-    fn non_frames(&self, answer: &str, math: u8) -> Vec<NonFrame> {
-        let parts = answer.split('$').collect::<Vec<_>>();
-        let mut frames = parts
-            .iter()
-            .enumerate()
-            .flat_map(|(index, part)| {
-                let mut frames = split_text(part)
-                    .into_iter()
-                    .map(NonFrame::Text)
-                    .collect::<Vec<_>>();
-                if index + 1 < parts.len() {
-                    frames.push(NonFrame::Formula((index + 1) as u8));
+    fn non_frames(&self, answer: &str, english: &[String], math: u8) -> Vec<NonFrame> {
+        let mut frames = parse_non_choice(answer, english, math)
+            .into_iter()
+            .flat_map(|part| match part {
+                NonChoicePart::Text(text) => {
+                    split_text(&text).into_iter().map(NonFrame::Text).collect()
                 }
-                frames
+                NonChoicePart::Formula(index) => vec![NonFrame::Formula(index)],
+                NonChoicePart::English(text) => vec![NonFrame::English(text)],
             })
             .collect::<Vec<_>>();
-        let formula_count = parts.len().saturating_sub(1);
-        (formula_count..math as usize)
-            .for_each(|index| frames.push(NonFrame::Formula((index + 1) as u8)));
         if frames.is_empty() {
             frames.push(NonFrame::Text(String::new()));
         }
