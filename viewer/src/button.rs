@@ -2,6 +2,7 @@ use esp_idf_svc::hal::gpio::{Input, InputPin, OutputPin, PinDriver, Pull};
 use std::time::{Duration, Instant};
 
 const LONG_PRESS_DURATION: Duration = Duration::from_millis(2500);
+const DEBOUNCE_DURATION: Duration = Duration::from_millis(100);
 const RELEASE_STABLE_DURATION: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,25 +22,37 @@ enum ButtonEdge {
 pub struct ControlButton<'d> {
     button: PinDriver<'d, Input>,
     state: bool,
+    sampled_state: bool,
+    sampled_at: Instant,
 }
 
 impl<'d> ControlButton<'d> {
     pub fn init<T: InputPin + OutputPin + 'd>(pin: T) -> anyhow::Result<Self> {
         let button = PinDriver::input(pin, Pull::Up)?;
         let state = button.is_low();
-        Ok(Self { button, state })
+        Ok(Self {
+            button,
+            state,
+            sampled_state: state,
+            sampled_at: Instant::now(),
+        })
     }
     fn poll(&mut self) -> Option<ButtonEdge> {
         let is_pressed = self.button.is_low();
-        if is_pressed != self.state {
-            self.state = is_pressed;
-            return Some(if is_pressed {
-                ButtonEdge::Pressed
-            } else {
-                ButtonEdge::Released
-            });
+        if is_pressed != self.sampled_state {
+            self.sampled_state = is_pressed;
+            self.sampled_at = Instant::now();
+            return None;
         }
-        None
+        if self.sampled_state == self.state || self.sampled_at.elapsed() < DEBOUNCE_DURATION {
+            return None;
+        }
+        self.state = self.sampled_state;
+        Some(if self.state {
+            ButtonEdge::Pressed
+        } else {
+            ButtonEdge::Released
+        })
     }
     fn is_pressed(&self) -> bool {
         self.state
@@ -81,13 +94,6 @@ impl<'d> ButtonController<'d> {
         let left_pressed = self.left.is_pressed();
         let right_pressed = self.right.is_pressed();
 
-        if matches!(left_edge, Some(ButtonEdge::Pressed)) {
-            self.left_pressed_at = Some(Instant::now());
-        }
-        if matches!(right_edge, Some(ButtonEdge::Pressed)) {
-            self.right_pressed_at = Some(Instant::now());
-        }
-
         if self.waiting_for_release {
             if self.release_is_stable(!left_pressed && !right_pressed) {
                 self.waiting_for_release = false;
@@ -95,6 +101,15 @@ impl<'d> ButtonController<'d> {
                 log::info!("Wake button released; button input ready");
             }
             return None;
+        }
+
+        if left_pressed && self.left_pressed_at.is_none() {
+            self.left_pressed_at = Some(Instant::now());
+            log::info!("Left button pressed");
+        }
+        if right_pressed && self.right_pressed_at.is_none() {
+            self.right_pressed_at = Some(Instant::now());
+            log::info!("Right button pressed");
         }
 
         self.chord |= left_pressed && right_pressed;
