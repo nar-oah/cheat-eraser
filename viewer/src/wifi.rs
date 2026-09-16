@@ -1,11 +1,10 @@
 use anyhow::{bail, Context, Result};
 use esp_idf_svc::eventloop::{EspSystemEventLoop, EspSystemSubscription};
 use esp_idf_svc::hal::modem::Modem;
-use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sys;
 use esp_idf_svc::wifi::{
-    AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, PmfConfiguration,
-    ScanMethod, ScanSortMethod, WifiEvent,
+    AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, ScanMethod,
+    ScanSortMethod, WifiEvent,
 };
 use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
@@ -17,6 +16,7 @@ const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const DRIVER_RESET_DELAY: Duration = Duration::from_millis(250);
 const MIN_RETRY_DELAY: Duration = Duration::from_millis(500);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(8);
+const WPA2_PMK: &str = "59aaf169d335c5d29c92457b9f89882bc986c1e89d1ee7814e24d22f7fa8c476";
 
 pub struct WifiConnection {
     _subscription: EspSystemSubscription<'static>,
@@ -25,21 +25,21 @@ pub struct WifiConnection {
 
 pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
     let sys_loop = EspSystemEventLoop::take()?;
-    let nvs = EspDefaultNvsPartition::take()?;
     let mut wifi = BlockingWifi::wrap(
-        EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
+        EspWifi::new(modem, sys_loop.clone(), None)?,
         sys_loop.clone(),
     )?;
     let wifi_configuration = Configuration::Client(ClientConfiguration {
         ssid: "naroah".try_into().unwrap(),
-        password: "Ylds0601".try_into().unwrap(),
+        // ESP-IDF accepts a 64-digit raw PSK, avoiding runtime PBKDF2 and stale PMK state.
+        password: WPA2_PMK.try_into().unwrap(),
         auth_method: AuthMethod::WPA2Personal,
         scan_method: ScanMethod::CompleteScan(ScanSortMethod::Signal),
-        pmf_cfg: PmfConfiguration::Capable { required: false },
         ..Default::default()
     });
 
     sys::esp!(unsafe { sys::esp_wifi_set_country_code(b"CN\0".as_ptr().cast(), false) })?;
+    sys::esp!(unsafe { sys::esp_wifi_set_storage(sys::wifi_storage_t_WIFI_STORAGE_RAM) })?;
     wifi.set_configuration(&wifi_configuration)?;
     wifi.start()?;
     configure_radio()?;
