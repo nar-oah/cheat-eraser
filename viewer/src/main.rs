@@ -74,8 +74,13 @@ fn main() -> Result<()> {
                     layout.refresh()?;
                 }
                 ButtonEvent::Sleep => {
-                    log::info!("Left long press -> deep sleep");
-                    enter_deep_sleep()?;
+                    log::info!("Left long press -> reset server and deep sleep");
+                    match layout.reset() {
+                        Ok(()) => enter_deep_sleep()?,
+                        Err(err) => {
+                            log::error!("Server reset failed; deep sleep aborted: {:?}", err)
+                        }
+                    }
                 }
                 ButtonEvent::Reset => {
                     log::info!("Both buttons long press -> reset server");
