@@ -9,7 +9,8 @@ pub enum ButtonEvent {
     Previous,
     Next,
     Refresh,
-    Shutdown,
+    Sleep,
+    Reset,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -109,8 +110,14 @@ impl<'d> ButtonController<'d> {
         });
 
         if self.pending_event.is_none() {
-            self.pending_event = if left_long {
-                Some(ButtonEvent::Shutdown)
+            self.pending_event = if self.chord {
+                if left_long && right_long {
+                    Some(ButtonEvent::Reset)
+                } else {
+                    None
+                }
+            } else if left_long {
+                Some(ButtonEvent::Sleep)
             } else if right_long {
                 Some(ButtonEvent::Refresh)
             } else {
