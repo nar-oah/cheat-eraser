@@ -84,24 +84,26 @@ fn subscribe(
     sys_loop: &EspSystemEventLoop,
     disconnect_sender: SyncSender<()>,
 ) -> Result<EspSystemSubscription<'static>> {
-    Ok(sys_loop.subscribe::<WifiEvent, _>(move |event| match event {
-        WifiEvent::StaConnected(info) => log::info!(
-            "WiFi associated: channel={}, auth={:?}, bssid={:02x?}",
-            info.channel(),
-            info.authmode(),
-            info.bssid()
-        ),
-        WifiEvent::StaDisconnected(info) => {
-            log::warn!(
-                "WiFi disconnected: reason={}, rssi={}, bssid={:02x?}",
-                info.reason(),
-                info.rssi(),
+    Ok(
+        sys_loop.subscribe::<WifiEvent, _>(move |event| match event {
+            WifiEvent::StaConnected(info) => log::info!(
+                "WiFi associated: channel={}, auth={:?}, bssid={:02x?}",
+                info.channel(),
+                info.authmode(),
                 info.bssid()
-            );
-            let _ = disconnect_sender.try_send(());
-        }
-        _ => {}
-    })?)
+            ),
+            WifiEvent::StaDisconnected(info) => {
+                log::warn!(
+                    "WiFi disconnected: reason={}, rssi={}, bssid={:02x?}",
+                    info.reason(),
+                    info.rssi(),
+                    info.bssid()
+                );
+                let _ = disconnect_sender.try_send(());
+            }
+            _ => {}
+        })?,
+    )
 }
 
 fn reconnect_loop(
