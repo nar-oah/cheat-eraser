@@ -45,7 +45,24 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
     configure_radio()?;
 
     let (disconnect_sender, disconnect_receiver) = sync_channel(1);
-    let subscription = sys_loop.subscribe::<WifiEvent, _>(move |event| match event {
+    let subscription = subscribe(&sys_loop, disconnect_sender)?;
+
+    let (ready_sender, ready_receiver) = sync_channel(1);
+    let worker = thread::Builder::new()
+        .name("wifi-reconnect".into())
+        .stack_size(8 * 1024)
+        .spawn(move || reconnect_loop(wifi, disconnect_receiver, ready_sender))
+        .context("Failed to start WiFi reconnect worker")?;
+    ready_receiver
+        .recv()
+        .context("WiFi reconnect worker stopped before obtaining an IP address")?;
+
+    Ok(WifiConnection {
+        _subscription: subscription,
+        _worker: worker,
+    })
+}
+
 fn configure_radio() -> Result<()> {
     sys::esp!(unsafe { sys::esp_wifi_set_ps(sys::wifi_ps_type_t_WIFI_PS_NONE) })?;
     sys::esp!(unsafe {
@@ -85,22 +102,6 @@ fn subscribe(
         }
         _ => {}
     })?)
-}
-
-    let (ready_sender, ready_receiver) = sync_channel(1);
-    let worker = thread::Builder::new()
-        .name("wifi-reconnect".into())
-        .stack_size(8 * 1024)
-        .spawn(move || reconnect_loop(wifi, disconnect_receiver, ready_sender))
-        .context("Failed to start WiFi reconnect worker")?;
-    ready_receiver
-        .recv()
-        .context("WiFi reconnect worker stopped before obtaining an IP address")?;
-
-    Ok(WifiConnection {
-        _subscription: subscription,
-        _worker: worker,
-    })
 }
 
 fn reconnect_loop(
