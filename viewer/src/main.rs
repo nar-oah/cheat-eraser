@@ -48,7 +48,7 @@ fn main() -> Result<()> {
 
     let peripherals = Peripherals::take()?;
 
-    let (_wifi_subscription, _wifi) = wifi::connect(peripherals.modem)?;
+    let _wifi = wifi::connect(peripherals.modem)?;
     let mut client = api::ApiClient::new()?;
     let pages = client.get_pages()?;
     let missing = client.get_missing()?;
