@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Literal, Self
 from pydantic import BaseModel, Field
 
 
@@ -56,3 +56,9 @@ class AnswerResponse(AnswerBase):
         data = obj.model_dump()
         data["non_choice"] = list(map(WordResponse.get_response, obj.non_choice))
         return cls(**data)
+
+
+class AnswerResult(BaseModel):
+    status: Literal["pending", "ready", "error"]
+    answer: AnswerResponse | None = None
+    error: str | None = None

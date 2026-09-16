@@ -1,6 +1,10 @@
+import logging
+
 from celery import Celery
 from celery.result import AsyncResult
+from pydantic import ValidationError
 from os import getenv
+from cheat_eraser_contracts.answer import AnswerResponse, AnswerResult
 
 QUEUE = "cheat-eraser-ai"
 celery_app = Celery(
@@ -8,6 +12,7 @@ celery_app = Celery(
     broker=getenv("CELERY_BROKER_URL", "redis://redis:6379/0"),
     backend=getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1"),
 )
+logger = logging.getLogger(__name__)
 
 
 def add_answer(images: list[bytes]) -> AsyncResult:
@@ -18,13 +23,29 @@ def add_answer(images: list[bytes]) -> AsyncResult:
     )
 
 
-def get_answer(task: AsyncResult | None) -> dict[str, object] | None:
-    result = (
-        task.get(propagate=False)
-        if isinstance(task, AsyncResult) and task.ready()
-        else None
-    )
-    return result if isinstance(result, dict) else None
+def get_answer(task: AsyncResult | None) -> AnswerResult:
+    if task is None or not task.ready():
+        return AnswerResult(status="pending")
+    if task.failed():
+        logger.error(
+            "AI answer task %s failed: %r\n%s",
+            task.id,
+            task.result,
+            task.traceback or "",
+        )
+        return AnswerResult(status="error", error="AI answer task failed")
+    result = task.get(propagate=False)
+    if not isinstance(result, dict):
+        logger.error("AI answer task %s returned invalid result: %r", task.id, result)
+        return AnswerResult(status="error", error="AI answer task returned no answer")
+    try:
+        answer = AnswerResponse.model_validate(result)
+    except ValidationError as error:
+        logger.error("AI answer task %s returned invalid answer: %s", task.id, error)
+        return AnswerResult(
+            status="error", error="AI answer task returned invalid answer"
+        )
+    return AnswerResult(status="ready", answer=answer)
 
 
 def get_formula(position: tuple[int, int]) -> bytes | None:

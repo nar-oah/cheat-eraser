@@ -7,7 +7,7 @@ ESP32-S3 摄像头扫描器固件。设备连接 Wi-Fi 后初始化摄像头，�
 - 基于 Rust + ESP-IDF 构建，目标芯片为 ESP32-S3。
 - 使用 `espressif/esp32-camera` 组件采集 JPEG 图像。
 - 按键触发拍照，GPIO2 低电平表示按下。
-- 图片采集后通过独立上传线程发送，避免阻塞主循环。
+- 图片采集后通过独立上传线程发送，待上传队列最多保留一张图片；队列忙时丢弃新图片并记录日志。
 - 启用 PSRAM，用于承载较大的相机帧缓冲。
 
 ## 硬件要求
@@ -66,7 +66,7 @@ ESP32-S3 摄像头扫描器固件。设备连接 Wi-Fi 后初始化摄像头，�
 
 在部署到不同环境前，需要先修改这两个文件。建议后续把这些值改为构建参数、NVS 配置或其他不直接提交到仓库的配置来源。
 
-PSRAM 和任务栈等 ESP-IDF 配置位于 [sdkconfig.defaults](sdkconfig.defaults)。当前相机帧使用 PSRAM，图像格式为 JPEG，分辨率为 UXGA，JPEG 质量参数为 `10`。
+PSRAM 和任务栈等 ESP-IDF 配置位于 [sdkconfig.defaults](sdkconfig.defaults)。当前相机帧使用 PSRAM，图像格式为 JPEG，分辨率为 QXGA，JPEG 质量参数为 `6`。
 
 ## 构建
 
@@ -112,9 +112,9 @@ cargo run
 4. 配置 GPIO2 为上拉输入。
 5. 启动后台上传线程。
 6. 主循环轮询按键状态。
-7. 按键从未按下变为按下时拍摄 JPEG。
-8. 图片数据复制到 `Vec<u8>` 并发送给上传线程。
-9. 上传线程通过 HTTPS POST 上传图片并记录服务端响应。
+7. 短按松开时拍摄 JPEG。
+8. 图片数据复制到 `Vec<u8>`，并尝试放入容量为 1 的上传队列；队列已满时立即丢弃该图片。
+9. 上传线程通过 HTTPS POST 上传图片，分别记录 HTTP 上传成功与服务端是否已成功收录试卷。
 
 ## 常见问题
 
@@ -124,7 +124,7 @@ cargo run
 
 ### 拍照或上传时内存不足
 
-当前使用 UXGA 分辨率和 PSRAM 帧缓冲。可以尝试降低 `frame_size`、调整 `jpeg_quality`，或检查 [sdkconfig.defaults](sdkconfig.defaults) 中的 PSRAM 配置是否生效。
+当前使用 QXGA 分辨率、JPEG 质量参数 `6` 和 PSRAM 帧缓冲。可以尝试降低 `frame_size`、调整 `jpeg_quality`，或检查 [sdkconfig.defaults](sdkconfig.defaults) 中的 PSRAM 配置是否生效。上传队列忙时会直接丢弃新拍摄图片，串口会输出明确日志。
 
 ### Wi-Fi connected 之后上传失败
 

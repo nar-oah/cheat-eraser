@@ -13,6 +13,7 @@ class Ai:
         self.answer: Optional[Answer] = None
 
     def get_answer(self, images: List[bytes]) -> None:
+        self.answer = None
         client = genai.Client()
         response = client.models.generate_content(
             model="gemini-3.5-flash",
@@ -32,7 +33,11 @@ class Ai:
             self.answer = Answer.model_validate_json(response.text)
 
     def get_formula(self, position: Tuple[int, int]) -> Optional[bytes]:
-        if self.answer:
+        if (
+            self.answer
+            and 0 <= position[0] < len(self.answer.non_choice)
+            and 0 <= position[1] < len(self.answer.non_choice[position[0]].math)
+        ):
             latex = self.answer.non_choice[position[0]].math[position[1]]
             math = zm.zmath.Latex(latex, color="white", size=24)
             svg = math.svg()

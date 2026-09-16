@@ -6,7 +6,7 @@
 
 - 显示已识别页码、缺失题目、单选题、多选题、判断题和非选择题答案。
 - 使用四个 3x3 棋盘区域进行内容显示和题号定位。
-- 通过两个按键切换上一页、下一页，双键同时按下触发重置。
+- 左键短按切换上一页，右键短按切换下一页；左键长按重置服务端并进入 deep sleep，右键长按手动刷新，双键长按仅重置服务端。
 - 非选择题支持中文文本、英文提示文本和公式 BMP 图片。
 - 60 秒无操作后让墨水屏休眠，刷新时自动唤醒。
 
@@ -29,11 +29,11 @@
 
 | 功能 | GPIO | 说明 |
 | --- | --- | --- |
-| 左键 | GPIO6 | 松开后切换到上一个画面 |
-| 右键 | GPIO5 | 松开后切换到下一个画面 |
-| 左键 + 右键 | GPIO6 + GPIO5 | 同时按下并释放后重置 |
+| 左键 | GPIO6 | 短按切换到上一个画面；长按重置服务端，成功后进入 deep sleep |
+| 右键 | GPIO5 | 短按切换到下一个画面；长按手动刷新当前画面 |
+| 左键 + 右键 | GPIO6 + GPIO5 | 双键长按后重置服务端，不进入 deep sleep |
 
-按键使用上拉输入，按下时应接地。
+按键使用上拉输入，按下时应接地。进入 deep sleep 后，按下任一按键都可唤醒 viewer；唤醒后需先松开按键，固件才会继续处理新的按键操作。
 
 ## 后端接口
 
@@ -49,28 +49,32 @@ const URL: &str = "https://aws.naroah.top/cheat/";
 | --- | --- | --- |
 | `/pages` | GET | 已识别页码数组，例如 `[1, 2, 4]` |
 | `/missing` | GET | 缺失题目映射，例如 `{"单": [3, 8], "多": [2]}` |
-| `/answer` | GET | 答案数据 |
-| `/formula` | POST | 请求体为 `[题号, 公式序号]`，返回 BMP 图片字节 |
+| `/answer` | GET | AI 状态以及生成完成后的答案数据 |
+| `/formula` | POST | 请求体为从 0 开始的 `[非选择题索引, 公式索引]`；成功返回 `image/bmp`，无结果返回 204 |
 | `/reset` | POST | 重置后端状态 |
 
 `/answer` 的 JSON 结构对应 `src/api.rs` 中的 `Answer`：
 
 ```json
 {
-  "single_choice": ["A", "B"],
-  "multiple_choice": ["AC", "BD"],
-  "binary_choice": [true, false],
-  "non_choice": [
-    {
-      "answer": ["中文答案$后续文本"],
-      "english": ["keyword"],
-      "math": 1
-    }
-  ]
+  "status": "ready",
+  "answer": {
+    "single_choice": ["A", "B"],
+    "multiple_choice": ["AC", "BD"],
+    "binary_choice": [true, false],
+    "non_choice": [
+      {
+        "answer": "中文答案$后续文本",
+        "english": ["keyword"],
+        "math": 1
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
-非选择题答案中的 `$` 表示公式占位。公式图片由 `/formula` 按需获取。
+`status` 为 `pending`、`ready` 或 `error`；等待和失败状态下 `answer` 为 `null`，失败原因通过 `error` 返回。非选择题的 `answer` 是字符串，其中 `$` 表示公式占位。公式图片由 `/formula` 按需获取。
 
 ## 配置
 

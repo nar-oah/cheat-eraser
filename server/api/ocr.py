@@ -36,16 +36,22 @@ def get_info(paper: np.ndarray) -> Optional[Dict[str, List[int]]]:
     return info_dict if info_dict else None
 
 
-def get_missing(info: Dict[str, List[int]]) -> Dict[str, List[int]]:
+def get_missing(
+    info: Dict[str, List[int]],
+    expected: Dict[str, Tuple[int, int]] | None = None,
+) -> Dict[str, List[int]]:
+    expected = expected or {}
     missing_dict: Dict[str, List[int]] = {}
-    for section, numbers in info.items():
-        if len(numbers) != 0:
-            start: int = numbers[0]
-            end: int = numbers[-1]
-            full_range: set[int] = set(range(start, end + 1))
-            actual_numbers: set[int] = set(numbers)
-            missing: List[int] = sorted(list(full_range - actual_numbers))
-            missing_dict.setdefault(section, missing)
+    sections = list(expected) + list(filter(lambda key: key not in expected, info))
+    for section in sections:
+        numbers = info.get(section, [])
+        bounds = expected.get(section)
+        if bounds is None and not numbers:
+            continue
+        start, end = bounds if bounds is not None else (numbers[0], numbers[-1])
+        full_range: set[int] = set(range(start, end + 1))
+        actual_numbers: set[int] = set(numbers)
+        missing_dict[section] = sorted(full_range - actual_numbers)
     return missing_dict
 
 
@@ -53,7 +59,7 @@ def mod_size(paper: np.ndarray) -> Optional[Tuple[np.ndarray, int]]:
     if (result := get_ocr(paper)) is None:
         return None
     (_, origin) = paper.shape[:2]
-    pat_footer = re.compile(r"第\s*(\d+)\s*页|共\s*\d+\s*页")
+    pat_footer = re.compile(r"第\s*(\d+)\s*页")
     footers: List[Tuple[Tuple[np.float32, np.float32], int]] = []
     for line in result:
         text = str(line[1])

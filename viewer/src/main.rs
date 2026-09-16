@@ -5,6 +5,7 @@ use esp_idf_svc::{hal::peripherals::Peripherals, sys};
 use std::thread;
 use std::time::Duration;
 mod api;
+mod api_core;
 mod button;
 mod display;
 mod layout;
@@ -73,13 +74,19 @@ fn main() -> Result<()> {
                     log::info!("Long press -> refresh current page");
                     layout.refresh()?;
                 }
-                ButtonEvent::Shutdown => {
+                ButtonEvent::Sleep => {
                     log::info!("Left long press -> reset server and deep sleep");
                     match layout.reset() {
                         Ok(()) => enter_deep_sleep()?,
                         Err(err) => {
                             log::error!("Server reset failed; deep sleep aborted: {:?}", err)
                         }
+                    }
+                }
+                ButtonEvent::Reset => {
+                    log::info!("Both buttons long press -> reset server");
+                    if let Err(err) = layout.reset() {
+                        log::error!("Server reset failed: {:?}", err);
                     }
                 }
             }

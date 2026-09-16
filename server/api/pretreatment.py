@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import numpy as np
 import cv2
 from ocr import get_info, mod_size, del_header, get_missing
@@ -12,9 +12,22 @@ class PaperInfo:
     info: Dict[str, List[int]] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class PaperResult:
+    accepted: bool
+    page: int | None = None
+    variance: float | None = None
+    reject_reason: str | None = None
+
+
 class TestPaper:
-    def __init__(self, threshold: float) -> None:
+    def __init__(
+        self,
+        threshold: float,
+        expected_ranges: Dict[str, Tuple[int, int]] | None = None,
+    ) -> None:
         self.threshold: float = threshold
+        self.expected_ranges = expected_ranges or {}
         self.papers: Dict[int, PaperInfo] = {}
 
     def _get_ndarray(self, image: bytes) -> Optional[np.ndarray]:
@@ -23,25 +36,30 @@ class TestPaper:
 
     def _get_variance(self, paper: np.ndarray) -> float:
         gray = cv2.cvtColor(paper, cv2.COLOR_BGR2GRAY)
-        return cv2.Laplacian(gray, cv2.CV_64F).var()
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
-    def add_paper(self, image: bytes) -> None:
+    def add_paper(self, image: bytes) -> PaperResult:
         if (paper := self._get_ndarray(image)) is None:
-            return None
+            return PaperResult(False, reject_reason="invalid image")
         variance: float = self._get_variance(paper)
         if variance < self.threshold:
-            return None
+            return PaperResult(
+                False, variance=variance, reject_reason="variance below threshold"
+            )
         if (res := mod_size(paper)) is None:
-            return None
+            return PaperResult(
+                False, variance=variance, reject_reason="current page number not found"
+            )
         paper, page = res
-        value = self.papers.get(page, PaperInfo())
         if (paper := del_header(paper)) is None:
-            return None
+            return PaperResult(False, page, variance, "header removal OCR failed")
         if (info := get_info(paper)) is None:
-            return None
-        self.papers[page] = max(
-            value, PaperInfo(variance, paper, info), key=lambda x: x.variance
-        )
+            return PaperResult(False, page, variance, "question numbers not found")
+        value = self.papers.get(page)
+        if value is not None and value.variance >= variance:
+            return PaperResult(False, page, variance, "lower-quality duplicate page")
+        self.papers[page] = PaperInfo(variance, paper, info)
+        return PaperResult(True, page, variance)
 
     def get_papers(self) -> List[PaperInfo]:
         return [paper for _, paper in sorted(self.papers.items())]
@@ -50,13 +68,14 @@ class TestPaper:
         res: Dict[str, List[int]] = {}
         papers = self.get_papers()
         for paper in papers:
-            missing = paper.info.copy()
+            missing = {key: value.copy() for key, value in paper.info.items()}
             last_key = next(reversed(res), None)
             last_value = missing.pop("unknown", [])
             if last_key:
                 res.setdefault(last_key, []).extend(last_value)
-            res.update(missing)
-        return get_missing(res)
+            for key, value in missing.items():
+                res.setdefault(key, []).extend(value)
+        return get_missing(res, self.expected_ranges)
 
 
 if __name__ == "__main__":

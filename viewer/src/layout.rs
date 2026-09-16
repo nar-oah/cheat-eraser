@@ -1,4 +1,5 @@
-use crate::api::{Answer, ApiClient, Missing, Pages};
+use crate::api::{Answer, AnswerState, ApiClient, Missing, Pages};
+use crate::api_core::{formula_api_position, parse_non_choice, NonChoicePart};
 use crate::display::{Scene, BORDER};
 use anyhow::Result;
 use embedded_graphics::prelude::Point;
@@ -27,6 +28,7 @@ enum Step {
 enum NonFrame {
     Text(String),
     Formula(u8),
+    English(String),
 }
 
 fn get_point(start: Point, index: i32) -> Point {
@@ -118,6 +120,7 @@ pub struct Layout<'a> {
     pages: Pages,
     missing: Missing,
     answer: Option<Answer>,
+    answer_error: Option<String>,
     uploaded: bool,
     answer_requested: bool,
     boards: [Chessboard; 4],
@@ -145,6 +148,7 @@ impl<'a> Layout<'a> {
             pages,
             missing,
             answer: None,
+            answer_error: None,
             uploaded: false,
             answer_requested: false,
             boards,
@@ -202,6 +206,7 @@ impl<'a> Layout<'a> {
         self.position = 0;
         self.frame = 0;
         self.answer = None;
+        self.answer_error = None;
         self.uploaded = false;
         self.answer_requested = false;
         self.render(false)?;
@@ -221,7 +226,13 @@ impl<'a> Layout<'a> {
                 self.clamp_position();
             }
             _ if Self::is_answer_step(self.step) && self.uploaded && self.answer.is_none() => {
-                self.refresh_answer()?;
+                if self.answer_error.is_some() {
+                    self.client.upload()?;
+                    self.answer_error = None;
+                    self.answer_requested = false;
+                } else {
+                    self.refresh_answer()?;
+                }
                 self.clamp_position();
             }
             _ => {}
@@ -240,11 +251,24 @@ impl<'a> Layout<'a> {
     }
     fn refresh_answer(&mut self) -> Result<bool> {
         self.answer_requested = true;
-        if let Some(answer) = self.client.get_answer()? {
-            self.answer = Some(answer);
-            return Ok(true);
+        match self.client.get_answer()? {
+            AnswerState::Pending => {
+                self.answer = None;
+                self.answer_error = None;
+                Ok(false)
+            }
+            AnswerState::Ready { answer } => {
+                self.answer = Some(answer);
+                self.answer_error = None;
+                Ok(true)
+            }
+            AnswerState::Error { error } => {
+                log::error!("AI answer task failed: {error}");
+                self.answer = None;
+                self.answer_error = Some(error);
+                Ok(false)
+            }
         }
-        Ok(false)
     }
     fn clamp_position(&mut self) {
         let len = self.step_len(self.step);
@@ -368,8 +392,16 @@ impl<'a> Layout<'a> {
             })?;
         self.boards[3].draw_location(&mut self.scene, "缺", self.position + 1)
     }
-    fn render_answer_pending(&mut self) -> Result<()> {
-        self.draw_content_chars("等待答案")?;
+    fn render_answer_unavailable(&mut self) -> Result<()> {
+        let error = self.answer_error.clone();
+        self.draw_content_chars(if error.is_some() {
+            "答案失败"
+        } else {
+            "等待答案"
+        })?;
+        if let Some(error) = error {
+            self.draw_logo_text(&error)?;
+        }
         self.boards[3].draw_location(&mut self.scene, "答", 1)
     }
     fn render_single(&mut self) -> Result<()> {
@@ -381,7 +413,7 @@ impl<'a> Layout<'a> {
                 .take(PAGE_SIZE)
                 .cloned()
                 .collect::<Vec<_>>(),
-            None => return self.render_answer_pending(),
+            None => return self.render_answer_unavailable(),
         };
         self.draw_content_items(&items)?;
         self.boards[3].draw_location(&mut self.scene, "单", self.position + 1)
@@ -395,7 +427,7 @@ impl<'a> Layout<'a> {
                 .take(MULTIPLE_PAGE_SIZE)
                 .cloned()
                 .collect::<Vec<_>>(),
-            None => return self.render_answer_pending(),
+            None => return self.render_answer_unavailable(),
         };
         answers.iter().enumerate().try_for_each(|(index, answer)| {
             self.boards[index].draw_items(
@@ -415,7 +447,7 @@ impl<'a> Layout<'a> {
                 .take(PAGE_SIZE)
                 .map(|answer| if *answer { "O" } else { "X" }.to_string())
                 .collect::<Vec<_>>(),
-            None => return self.render_answer_pending(),
+            None => return self.render_answer_unavailable(),
         };
         self.draw_content_items(&items)?;
         self.boards[3].draw_location(&mut self.scene, "判", self.position + 1)
@@ -423,31 +455,34 @@ impl<'a> Layout<'a> {
     fn render_non_choice(&mut self) -> Result<()> {
         let answer = match &self.answer {
             Some(answer) => answer,
-            None => return self.render_answer_pending(),
+            None => return self.render_answer_unavailable(),
         };
         if answer.non_choice.is_empty() {
             return self.boards[3].draw_location(&mut self.scene, "非", 1);
         }
         let word = &answer.non_choice[self.position];
-        let answer = word.answer.join("");
-        let english = word.english.join(" ");
+        let answer = word.answer.clone();
+        let english = word.english.clone();
         let math = word.math;
         let frame = self
-            .non_frames(&answer, math)
+            .non_frames(&answer, &english, math)
             .into_iter()
             .nth(self.frame)
             .unwrap_or(NonFrame::Text(String::new()));
         match frame {
             NonFrame::Text(text) => {
                 self.draw_content_chars(&text)?;
-                self.draw_logo_text(&english)?;
             }
             NonFrame::Formula(index) => {
                 self.draw_content_chars("$")?;
-                let logo = self.client.get_formula((self.position as u8 + 1, index))?;
-                if !logo.is_empty() {
+                let position = formula_api_position(self.position as u8, index);
+                if let Some(logo) = self.client.get_formula(position)? {
                     self.scene.mod_logo(logo)?;
                 }
+            }
+            NonFrame::English(text) => {
+                self.draw_content_chars("$")?;
+                self.draw_logo_text(&text)?;
             }
         }
         self.boards[3].draw_location(&mut self.scene, "非", self.position + 1)
@@ -507,29 +542,24 @@ impl<'a> Layout<'a> {
         self.answer
             .as_ref()
             .and_then(|answer| answer.non_choice.get(position))
-            .map(|word| self.non_frames(&word.answer.join(""), word.math).len())
+            .map(|word| {
+                self.non_frames(&word.answer, &word.english, word.math)
+                    .len()
+            })
             .unwrap_or(1)
             .max(1)
     }
-    fn non_frames(&self, answer: &str, math: u8) -> Vec<NonFrame> {
-        let parts = answer.split('$').collect::<Vec<_>>();
-        let mut frames = parts
-            .iter()
-            .enumerate()
-            .flat_map(|(index, part)| {
-                let mut frames = split_text(part)
-                    .into_iter()
-                    .map(NonFrame::Text)
-                    .collect::<Vec<_>>();
-                if index + 1 < parts.len() {
-                    frames.push(NonFrame::Formula((index + 1) as u8));
+    fn non_frames(&self, answer: &str, english: &[String], math: u8) -> Vec<NonFrame> {
+        let mut frames = parse_non_choice(answer, english, math)
+            .into_iter()
+            .flat_map(|part| match part {
+                NonChoicePart::Text(text) => {
+                    split_text(&text).into_iter().map(NonFrame::Text).collect()
                 }
-                frames
+                NonChoicePart::Formula(index) => vec![NonFrame::Formula(index)],
+                NonChoicePart::English(text) => vec![NonFrame::English(text)],
             })
             .collect::<Vec<_>>();
-        let formula_count = parts.len().saturating_sub(1);
-        (formula_count..math as usize)
-            .for_each(|index| frames.push(NonFrame::Formula((index + 1) as u8)));
         if frames.is_empty() {
             frames.push(NonFrame::Text(String::new()));
         }
