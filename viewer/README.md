@@ -49,28 +49,32 @@ const URL: &str = "https://aws.naroah.top/cheat/";
 | --- | --- | --- |
 | `/pages` | GET | 已识别页码数组，例如 `[1, 2, 4]` |
 | `/missing` | GET | 缺失题目映射，例如 `{"单": [3, 8], "多": [2]}` |
-| `/answer` | GET | 答案数据 |
-| `/formula` | POST | 请求体为 `[题号, 公式序号]`，返回 BMP 图片字节 |
+| `/answer` | GET | AI 状态以及生成完成后的答案数据 |
+| `/formula` | POST | 请求体为 `[题号, 公式序号]`；成功返回 `image/bmp`，无结果返回 204 |
 | `/reset` | POST | 重置后端状态 |
 
 `/answer` 的 JSON 结构对应 `src/api.rs` 中的 `Answer`：
 
 ```json
 {
-  "single_choice": ["A", "B"],
-  "multiple_choice": ["AC", "BD"],
-  "binary_choice": [true, false],
-  "non_choice": [
-    {
-      "answer": ["中文答案$后续文本"],
-      "english": ["keyword"],
-      "math": 1
-    }
-  ]
+  "status": "ready",
+  "answer": {
+    "single_choice": ["A", "B"],
+    "multiple_choice": ["AC", "BD"],
+    "binary_choice": [true, false],
+    "non_choice": [
+      {
+        "answer": "中文答案$后续文本",
+        "english": ["keyword"],
+        "math": 1
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
-非选择题答案中的 `$` 表示公式占位。公式图片由 `/formula` 按需获取。
+`status` 为 `pending`、`ready` 或 `error`；等待和失败状态下 `answer` 为 `null`，失败原因通过 `error` 返回。非选择题的 `answer` 是字符串，其中 `$` 表示公式占位。公式图片由 `/formula` 按需获取。
 
 ## 配置
 
