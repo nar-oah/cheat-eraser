@@ -8,6 +8,8 @@ services:
       - backend
     volumes:
       - backup:/app/api/backup
+    environment:
+      EXPECTED_QUESTION_RANGES: "${EXPECTED_QUESTION_RANGES:-{}}"
     healthcheck:
       test:
         - CMD
