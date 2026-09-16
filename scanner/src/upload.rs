@@ -50,7 +50,11 @@ pub fn image(image_data: Vec<u8>) -> Result<PreCheckResponse> {
 
     let status = connection.status();
     if (200..300).contains(&status) {
-        log::info!("HTTP image upload successful: endpoint={}, status={}", url, status);
+        log::info!(
+            "HTTP image upload successful: endpoint={}, status={}",
+            url,
+            status
+        );
         let mut buffer = [0u8; 512];
         let mut response = Vec::new();
         loop {
