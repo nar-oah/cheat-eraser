@@ -90,6 +90,10 @@ pub fn parse_answer(bytes: &[u8]) -> Result<AnswerState> {
     }
 }
 
+pub fn formula_api_position(question_index: u8, formula_number: u8) -> (u8, u8) {
+    (question_index, formula_number.saturating_sub(1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,9 +101,11 @@ mod tests {
 
     #[test]
     fn reads_response_larger_than_one_chunk() {
-        let expected = (0..4097)
-            .map(|index| (index % 251) as u8)
-            .collect::<Vec<_>>();
+        let long_answer = "x".repeat(RESPONSE_CHUNK_SIZE + 37);
+        let expected = format!(
+            r#"{{"status":"ready","answer":{{"single_choice":[],"multiple_choice":[],"binary_choice":[],"non_choice":[{{"answer":"{long_answer}","english":[],"math":0}}]}},"error":null}}"#
+        )
+        .into_bytes();
         let mut offset = 0;
         let actual = read_bounded("answer", |buf| {
             let count = (expected.len() - offset).min(buf.len());
@@ -110,6 +116,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(actual, expected);
+        let AnswerState::Ready { answer } = parse_answer(&actual).unwrap() else {
+            panic!("expected ready answer")
+        };
+        assert_eq!(answer.non_choice[0].answer, long_answer);
     }
 
     #[test]
@@ -159,5 +169,11 @@ mod tests {
         let error = check_status("pages", 503).unwrap_err().to_string();
         assert!(error.contains("/pages"));
         assert!(error.contains("503"));
+    }
+
+    #[test]
+    fn maps_formula_number_to_zero_based_api_position() {
+        assert_eq!(formula_api_position(2, 1), (2, 0));
+        assert_eq!(formula_api_position(2, 3), (2, 2));
     }
 }
