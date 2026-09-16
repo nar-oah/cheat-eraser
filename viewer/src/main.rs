@@ -5,6 +5,7 @@ use esp_idf_svc::{hal::peripherals::Peripherals, sys};
 use std::thread;
 use std::time::Duration;
 mod api;
+mod api_core;
 mod button;
 mod display;
 mod layout;
