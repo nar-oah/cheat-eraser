@@ -16,7 +16,6 @@ const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const MIN_RETRY_DELAY: Duration = Duration::from_millis(500);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(8);
-const DRIVER_RETRY_COUNT: u8 = 5;
 
 pub struct WifiConnection {
     _subscription: EspSystemSubscription<'static>,
@@ -40,7 +39,6 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
 
     sys::esp!(unsafe { sys::esp_wifi_set_country_code(b"CN\0".as_ptr().cast(), false) })?;
     wifi.set_configuration(&wifi_configuration)?;
-    set_driver_retry_count()?;
     wifi.start()?;
     sys::esp!(unsafe { sys::esp_wifi_set_ps(sys::wifi_ps_type_t_WIFI_PS_NONE) })?;
     sys::esp!(unsafe {
@@ -90,21 +88,6 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
         _subscription: subscription,
         _worker: worker,
     })
-}
-
-fn set_driver_retry_count() -> Result<()> {
-    let mut configuration = sys::wifi_config_t::default();
-    sys::esp!(unsafe {
-        sys::esp_wifi_get_config(sys::wifi_interface_t_WIFI_IF_STA, &mut configuration)
-    })?;
-    unsafe {
-        configuration.sta.failure_retry_cnt = DRIVER_RETRY_COUNT;
-        sys::esp!(sys::esp_wifi_set_config(
-            sys::wifi_interface_t_WIFI_IF_STA,
-            &mut configuration,
-        ))?;
-    }
-    Ok(())
 }
 
 fn reconnect_loop(
