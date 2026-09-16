@@ -16,7 +16,6 @@ const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const DRIVER_RESET_DELAY: Duration = Duration::from_millis(250);
 const MIN_RETRY_DELAY: Duration = Duration::from_millis(500);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(8);
-const WPA2_PMK: &str = "59aaf169d335c5d29c92457b9f89882bc986c1e89d1ee7814e24d22f7fa8c476";
 
 pub struct WifiConnection {
     _subscription: EspSystemSubscription<'static>,
@@ -31,8 +30,7 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
     )?;
     let wifi_configuration = Configuration::Client(ClientConfiguration {
         ssid: "naroah".try_into().unwrap(),
-        // ESP-IDF accepts a 64-digit raw PSK, avoiding runtime PBKDF2 and stale PMK state.
-        password: WPA2_PMK.try_into().unwrap(),
+        password: "Ylds0601".try_into().unwrap(),
         auth_method: AuthMethod::WPA2Personal,
         scan_method: ScanMethod::CompleteScan(ScanSortMethod::Signal),
         ..Default::default()
@@ -41,18 +39,6 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
     sys::esp!(unsafe { sys::esp_wifi_set_country_code(b"CN\0".as_ptr().cast(), false) })?;
     sys::esp!(unsafe { sys::esp_wifi_set_storage(sys::wifi_storage_t_WIFI_STORAGE_RAM) })?;
     wifi.set_configuration(&wifi_configuration)?;
-    let mut station_mac = [0_u8; 6];
-    sys::esp!(unsafe {
-        sys::esp_read_mac(
-            station_mac.as_mut_ptr(),
-            sys::esp_mac_type_t_ESP_MAC_WIFI_STA,
-        )
-    })?;
-    station_mac[0] |= 0x02;
-    station_mac[5] ^= 0x5a;
-    sys::esp!(unsafe {
-        sys::esp_wifi_set_mac(sys::wifi_interface_t_WIFI_IF_STA, station_mac.as_ptr())
-    })?;
     wifi.start()?;
     configure_radio()?;
 
