@@ -3,7 +3,7 @@ import json
 import logging
 from os import getenv
 from celery.result import AsyncResult
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from cheat_eraser_contracts.answer import AnswerResponse, AnswerResult
 from pretreatment import PaperResult, TestPaper

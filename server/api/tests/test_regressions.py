@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 import main as api
 import ocr
 from cheat_eraser_contracts.answer import AnswerResponse
-from pretreatment import TestPaper
+from pretreatment import TestPaper as Exam
 
 
 ANSWER = {
@@ -49,7 +49,7 @@ def get_answer_result(task):
 def test_reset_clears_answer_task_and_cache(monkeypatch):
     monkeypatch.setattr(api, "save_exam", lambda value: None)
     monkeypatch.setattr(api, "EXPECTED_RANGES", {"一": (1, 5)})
-    api.exam = TestPaper(100.0)
+    api.exam = Exam(100.0)
     api.answer_task = FakeTask()
     api.answer_cache = AnswerResponse.model_validate(ANSWER)
     api.answer_error = "old error"
@@ -59,6 +59,20 @@ def test_reset_clears_answer_task_and_cache(monkeypatch):
     assert api.exam.papers == {}
     assert api.exam.expected_ranges == {"一": (1, 5)}
     assert api.answer_task is None
+    assert api.answer_cache is None
+    assert api.answer_error is None
+
+
+def test_upload_clears_old_answer_cache_and_starts_pending(monkeypatch):
+    task = FakeTask(ready=False)
+    monkeypatch.setattr(api, "add_answer", lambda papers: task)
+    api.exam = Exam(100.0)
+    api.answer_cache = AnswerResponse.model_validate(ANSWER)
+    api.answer_error = "old error"
+
+    asyncio.run(api.add_image())
+
+    assert api.answer_task is task
     assert api.answer_cache is None
     assert api.answer_error is None
 

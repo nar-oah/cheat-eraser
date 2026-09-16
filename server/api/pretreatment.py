@@ -36,7 +36,7 @@ class TestPaper:
 
     def _get_variance(self, paper: np.ndarray) -> float:
         gray = cv2.cvtColor(paper, cv2.COLOR_BGR2GRAY)
-        return cv2.Laplacian(gray, cv2.CV_64F).var()
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
     def add_paper(self, image: bytes) -> PaperResult:
         if (paper := self._get_ndarray(image)) is None:
