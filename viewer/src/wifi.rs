@@ -44,7 +44,7 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
     sys::esp!(unsafe {
         sys::esp_wifi_set_protocol(
             sys::wifi_interface_t_WIFI_IF_STA,
-            (sys::WIFI_PROTOCOL_11B | sys::WIFI_PROTOCOL_11G | sys::WIFI_PROTOCOL_11N) as u8,
+            (sys::WIFI_PROTOCOL_11B | sys::WIFI_PROTOCOL_11G) as u8,
         )
     })?;
     sys::esp!(unsafe {
