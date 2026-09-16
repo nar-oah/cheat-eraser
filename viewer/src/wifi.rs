@@ -41,6 +41,18 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
     sys::esp!(unsafe { sys::esp_wifi_set_country_code(b"CN\0".as_ptr().cast(), false) })?;
     sys::esp!(unsafe { sys::esp_wifi_set_storage(sys::wifi_storage_t_WIFI_STORAGE_RAM) })?;
     wifi.set_configuration(&wifi_configuration)?;
+    let mut station_mac = [0_u8; 6];
+    sys::esp!(unsafe {
+        sys::esp_read_mac(
+            station_mac.as_mut_ptr(),
+            sys::esp_mac_type_t_ESP_MAC_WIFI_STA,
+        )
+    })?;
+    station_mac[0] |= 0x02;
+    station_mac[5] ^= 0x5a;
+    sys::esp!(unsafe {
+        sys::esp_wifi_set_mac(sys::wifi_interface_t_WIFI_IF_STA, station_mac.as_ptr())
+    })?;
     wifi.start()?;
     configure_radio()?;
 
