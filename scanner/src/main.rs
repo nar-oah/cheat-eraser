@@ -116,7 +116,7 @@ fn main() -> anyhow::Result<()> {
 
                 if let Some(frame) = camera::CameraFrame::get() {
                     let data = frame.data().to_vec();
-                    log::info!("Picture taken! Size: {} bytes. Uploading...", data.len());
+                    log::info!("Picture taken! Size: {} bytes. Queueing...", data.len());
                     match tx.try_send(data) {
                         Ok(()) => log::info!("Image queued for upload"),
                         Err(TrySendError::Full(data)) => {
