@@ -28,7 +28,7 @@ fn report_status(ready: bool, shutting_down: &AtomicBool, request_lock: &Mutex<(
 fn run_status_sync(
     ready: Arc<AtomicBool>,
     shutting_down: Arc<AtomicBool>,
-    changes: Receiver<bool>,
+    changes: Receiver<()>,
     request_lock: Arc<Mutex<()>>,
 ) {
     let mut next_heartbeat = Instant::now();
@@ -43,15 +43,18 @@ fn run_status_sync(
         }
 
         match changes.recv_timeout(next_heartbeat.saturating_duration_since(Instant::now())) {
-            Ok(value) => report_status(value, &shutting_down, &request_lock),
+            Ok(()) => {
+                while changes.try_recv().is_ok() {}
+                report_status(ready.load(Ordering::SeqCst), &shutting_down, &request_lock);
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
     }
 }
 
-fn send_status_change(sender: &Sender<bool>, ready: bool) {
-    if sender.send(ready).is_err() {
+fn send_status_change(sender: &Sender<()>) {
+    if sender.send(()).is_err() {
         log::warn!("Scanner status thread stopped");
     }
 }
@@ -102,7 +105,7 @@ fn main() -> anyhow::Result<()> {
 
     let ready = Arc::new(AtomicBool::new(true));
     let shutting_down = Arc::new(AtomicBool::new(false));
-    let (status_tx, status_rx) = mpsc::channel::<bool>();
+    let (status_tx, status_rx) = mpsc::channel::<()>();
     let state_lock = Arc::new(Mutex::new(()));
     let status_request_lock = Arc::new(Mutex::new(()));
     let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(1);
@@ -133,7 +136,7 @@ fn main() -> anyhow::Result<()> {
                 match upload_state_lock.lock() {
                     Ok(_guard) if !upload_shutting_down.load(Ordering::SeqCst) => {
                         upload_ready.store(true, Ordering::SeqCst);
-                        send_status_change(&upload_status_tx, true);
+                        send_status_change(&upload_status_tx);
                     }
                     Ok(_) => {}
                     Err(_) => log::warn!("Scanner state lock is unavailable"),
@@ -189,7 +192,7 @@ fn main() -> anyhow::Result<()> {
                             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
                             .is_ok()
                         {
-                            send_status_change(&status_tx, false);
+                            send_status_change(&status_tx);
                             true
                         } else {
                             false
@@ -224,7 +227,7 @@ fn main() -> anyhow::Result<()> {
                         match state_lock.lock() {
                             Ok(_guard) if !shutting_down.load(Ordering::SeqCst) => {
                                 ready.store(true, Ordering::SeqCst);
-                                send_status_change(&status_tx, true);
+                                send_status_change(&status_tx);
                             }
                             Ok(_) => {}
                             Err(_) => log::warn!("Scanner state lock is unavailable"),
@@ -251,7 +254,7 @@ fn main() -> anyhow::Result<()> {
                 Ok(_guard) => {
                     shutting_down.store(true, Ordering::SeqCst);
                     ready.store(false, Ordering::SeqCst);
-                    send_status_change(&status_tx, false);
+                    send_status_change(&status_tx);
                 }
                 Err(_) => log::warn!("Scanner state lock is unavailable"),
             }
