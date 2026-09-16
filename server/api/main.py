@@ -2,9 +2,11 @@ import cv2
 import json
 import logging
 from os import getenv
+from time import monotonic
 from celery.result import AsyncResult
 from typing import Dict, List, Tuple
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from pydantic import BaseModel
 from cheat_eraser_contracts.answer import AnswerResponse, AnswerResult
 from pretreatment import PaperResult, TestPaper
 from exam_backup import save_exam
@@ -23,6 +25,12 @@ exam = TestPaper(100.0, EXPECTED_RANGES)
 answer_task: AsyncResult | None = None
 answer_cache: AnswerResponse | None = None
 answer_error: str | None = None
+scanner_ready = False
+scanner_heartbeat: float | None = None
+
+
+class ScannerStatus(BaseModel):
+    ready: bool
 
 
 def mod_answer(result: AnswerResult) -> None:
@@ -48,6 +56,23 @@ async def get_pages() -> List[int]:
 @app.get("/missing")
 async def get_missing() -> Dict[str, List[int]]:
     return exam.get_missing()
+
+
+@app.post("/scanner/status")
+async def mod_scanner_status(status: ScannerStatus) -> None:
+    global scanner_ready, scanner_heartbeat
+    scanner_ready = status.ready
+    scanner_heartbeat = monotonic()
+
+
+@app.get("/scanner/status", response_model=ScannerStatus)
+async def get_scanner_status() -> ScannerStatus:
+    ready = (
+        scanner_ready
+        and scanner_heartbeat is not None
+        and monotonic() - scanner_heartbeat <= 15.0
+    )
+    return ScannerStatus(ready=ready)
 
 
 @app.post("/upload")
