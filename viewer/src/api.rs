@@ -1,32 +1,82 @@
-use anyhow::Result;
-use embedded_svc::{http::client::Client, utils::io};
+use anyhow::{anyhow, bail, Context, Result};
+use embedded_svc::http::client::Client;
 use esp_idf_svc::{
     http::client::{Configuration as HttpConfiguration, EspHttpConnection},
     io::Write,
 };
 use serde::{de::DeserializeOwned, Deserialize};
 use std::collections::HashMap;
+use std::fmt::Display;
 
 const URL: &str = "https://aws.naroah.top/cheat/";
+const MAX_RESPONSE_SIZE: usize = 256 * 1024;
+const RESPONSE_CHUNK_SIZE: usize = 1024;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct Word {
-    pub answer: Vec<String>,
+    pub answer: String,
     pub english: Vec<String>,
     pub math: u8,
 }
-#[derive(Deserialize, Debug)]
+
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct Answer {
     pub single_choice: Vec<String>,
     pub multiple_choice: Vec<String>,
     pub binary_choice: Vec<bool>,
     pub non_choice: Vec<Word>,
 }
+
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(tag = "status", rename_all = "lowercase")]
+pub enum AnswerState {
+    Pending,
+    Ready { answer: Answer },
+    Error { error: String },
+}
+
 pub type Pages = Vec<u8>;
 pub type Missing = HashMap<String, Vec<u8>>;
-pub type Formula = Vec<u8>;
+pub type Formula = Option<Vec<u8>>;
+
 pub struct ApiClient {
     client: Client<EspHttpConnection>,
+}
+
+fn check_status(endpoint: &str, status: u16) -> Result<()> {
+    if !(200..300).contains(&status) {
+        bail!("HTTP endpoint /{endpoint} returned status {status}")
+    }
+    Ok(())
+}
+
+fn read_bounded<E>(
+    endpoint: &str,
+    mut read: impl FnMut(&mut [u8]) -> std::result::Result<usize, E>,
+) -> Result<Vec<u8>>
+where
+    E: Display,
+{
+    let mut result = Vec::new();
+    let mut buf = [0_u8; RESPONSE_CHUNK_SIZE];
+    loop {
+        let count = read(&mut buf)
+            .map_err(|error| anyhow!("Failed reading HTTP endpoint /{endpoint}: {error}"))?;
+        if count == 0 {
+            return Ok(result);
+        }
+        if count > buf.len() {
+            bail!("HTTP endpoint /{endpoint} returned an invalid read length {count}")
+        }
+        if result.len() > MAX_RESPONSE_SIZE.saturating_sub(count) {
+            bail!("HTTP endpoint /{endpoint} response exceeds {MAX_RESPONSE_SIZE} bytes")
+        }
+        result.extend_from_slice(&buf[..count]);
+    }
+}
+
+fn parse_answer(bytes: &[u8]) -> Result<AnswerState> {
+    serde_json::from_slice(bytes).context("Invalid JSON from HTTP endpoint /answer")
 }
 
 impl ApiClient {
