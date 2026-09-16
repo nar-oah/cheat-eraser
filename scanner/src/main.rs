@@ -184,10 +184,17 @@ fn main() -> anyhow::Result<()> {
             } else if pressed_at.is_some() {
                 log::info!("Short press -> capture");
                 let capture_reserved = match state_lock.lock() {
-                    Ok(_guard) if !shutting_down.load(Ordering::SeqCst) => ready
-                        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-                        .map(|_| send_status_change(&status_tx, false))
-                        .is_ok(),
+                    Ok(_guard) if !shutting_down.load(Ordering::SeqCst) => {
+                        if ready
+                            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+                            .is_ok()
+                        {
+                            send_status_change(&status_tx, false);
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     Ok(_) => false,
                     Err(_) => {
                         log::warn!("Scanner state lock is unavailable");
