@@ -29,6 +29,8 @@ def test_scanner_status_starts_false_and_expires(monkeypatch):
 
 def test_scanner_status_accepts_busy_heartbeat(monkeypatch):
     monkeypatch.setattr(api, "monotonic", lambda: 200.0)
+    monkeypatch.setattr(api, "scanner_ready", True)
+    monkeypatch.setattr(api, "scanner_heartbeat", 150.0)
 
     asyncio.run(api.mod_scanner_status(api.ScannerStatus(ready=False)))
 
