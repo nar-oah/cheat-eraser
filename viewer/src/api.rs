@@ -27,12 +27,26 @@ pub struct Answer {
     pub non_choice: Vec<Word>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
-#[serde(tag = "status", rename_all = "lowercase")]
+#[derive(Debug, PartialEq)]
 pub enum AnswerState {
     Pending,
     Ready { answer: Answer },
     Error { error: String },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum AnswerStatus {
+    Pending,
+    Ready,
+    Error,
+}
+
+#[derive(Deserialize)]
+struct AnswerEnvelope {
+    status: AnswerStatus,
+    answer: Option<Answer>,
+    error: Option<String>,
 }
 
 pub type Pages = Vec<u8>;
@@ -76,7 +90,19 @@ where
 }
 
 fn parse_answer(bytes: &[u8]) -> Result<AnswerState> {
-    serde_json::from_slice(bytes).context("Invalid JSON from HTTP endpoint /answer")
+    let response: AnswerEnvelope =
+        serde_json::from_slice(bytes).context("Invalid JSON from HTTP endpoint /answer")?;
+    match response.status {
+        AnswerStatus::Pending => Ok(AnswerState::Pending),
+        AnswerStatus::Ready => response
+            .answer
+            .map(|answer| AnswerState::Ready { answer })
+            .context("HTTP endpoint /answer returned ready without an answer"),
+        AnswerStatus::Error => response
+            .error
+            .map(|error| AnswerState::Error { error })
+            .context("HTTP endpoint /answer returned error without a reason"),
+    }
 }
 
 impl ApiClient {
