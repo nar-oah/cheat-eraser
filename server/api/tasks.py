@@ -42,7 +42,9 @@ def get_answer(task: AsyncResult | None) -> AnswerResult:
         answer = AnswerResponse.model_validate(result)
     except ValidationError as error:
         logger.error("AI answer task %s returned invalid answer: %s", task.id, error)
-        return AnswerResult(status="error", error="AI answer task returned invalid answer")
+        return AnswerResult(
+            status="error", error="AI answer task returned invalid answer"
+        )
     return AnswerResult(status="ready", answer=answer)
 
 

@@ -52,9 +52,7 @@ class TestPaper:
             )
         paper, page = res
         if (paper := del_header(paper)) is None:
-            return PaperResult(
-                False, page, variance, "header removal OCR failed"
-            )
+            return PaperResult(False, page, variance, "header removal OCR failed")
         if (info := get_info(paper)) is None:
             return PaperResult(False, page, variance, "question numbers not found")
         value = self.papers.get(page)
