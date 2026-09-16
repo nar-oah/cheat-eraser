@@ -139,12 +139,21 @@ fn reconnect_loop(
                 log::warn!(
                     "WiFi connection attempt {attempt} failed: {err:?}; retrying in {retry_delay:?}"
                 );
-                let _ = wifi.wifi_mut().disconnect();
+                if let Err(reset_err) = restart_wifi(&mut wifi) {
+                    log::warn!("Failed to reset WiFi driver: {reset_err:?}");
+                }
                 thread::sleep(retry_delay);
                 retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
             }
         }
     }
+}
+
+fn restart_wifi(wifi: &mut BlockingWifi<EspWifi<'static>>) -> Result<()> {
+    wifi.stop().context("failed to stop WiFi driver")?;
+    thread::sleep(DRIVER_RESET_DELAY);
+    wifi.start().context("failed to restart WiFi driver")?;
+    configure_radio().context("failed to restore WiFi radio settings")
 }
 
 fn connect_once(
