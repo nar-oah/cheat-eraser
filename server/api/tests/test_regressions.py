@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 import main as api
 import ocr
 from cheat_eraser_contracts.answer import AnswerResponse
-from pretreatment import TestPaper as Exam
+from pretreatment import PaperInfo, TestPaper as Exam
 
 
 ANSWER = {
@@ -120,3 +120,16 @@ def test_answer_pending_ready_and_error_states(caplog):
 def test_expected_ranges_detect_leading_and_trailing_missing_questions():
     assert ocr.get_missing({"一": [2, 3, 4]}, {"一": (1, 5)}) == {"一": [1, 5]}
     assert ocr.get_missing({}, {"二": (6, 8)}) == {"二": [6, 7, 8]}
+
+
+def test_missing_merges_pages_without_mutating_paper_info():
+    exam = Exam(100.0, {"一": (1, 5)})
+    exam.papers = {
+        1: PaperInfo(info={"一": [2]}),
+        2: PaperInfo(info={"unknown": [3], "一": [4]}),
+    }
+
+    assert exam.get_missing() == {"一": [1, 5]}
+    assert exam.get_missing() == {"一": [1, 5]}
+    assert exam.papers[1].info == {"一": [2]}
+    assert exam.papers[2].info == {"unknown": [3], "一": [4]}

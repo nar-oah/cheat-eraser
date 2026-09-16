@@ -68,12 +68,13 @@ class TestPaper:
         res: Dict[str, List[int]] = {}
         papers = self.get_papers()
         for paper in papers:
-            missing = paper.info.copy()
+            missing = {key: value.copy() for key, value in paper.info.items()}
             last_key = next(reversed(res), None)
             last_value = missing.pop("unknown", [])
             if last_key:
                 res.setdefault(last_key, []).extend(last_value)
-            res.update(missing)
+            for key, value in missing.items():
+                res.setdefault(key, []).extend(value)
         return get_missing(res, self.expected_ranges)
 
 
