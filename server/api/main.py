@@ -83,7 +83,14 @@ async def get_result() -> AnswerResult:
     )
 
 
-@app.post("/formula")
+@app.post(
+    "/formula",
+    response_class=Response,
+    responses={
+        200: {"description": "Formula BMP", "content": {"image/bmp": {}}},
+        204: {"description": "No formula image"},
+    },
+)
 async def get_formula_image(position: Tuple[int, int]) -> Response:
     value = get_formula(position)
     return (
