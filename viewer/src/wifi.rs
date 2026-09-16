@@ -4,8 +4,8 @@ use esp_idf_svc::hal::modem::Modem;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sys;
 use esp_idf_svc::wifi::{
-    AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, ScanMethod,
-    ScanSortMethod, WifiEvent,
+    AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, PmfConfiguration,
+    ScanMethod, ScanSortMethod, WifiEvent,
 };
 use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const DRIVER_RESET_DELAY: Duration = Duration::from_millis(250);
 const MIN_RETRY_DELAY: Duration = Duration::from_millis(500);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(8);
 
@@ -34,17 +35,23 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
         password: "Ylds0601".try_into().unwrap(),
         auth_method: AuthMethod::WPA2Personal,
         scan_method: ScanMethod::CompleteScan(ScanSortMethod::Signal),
+        pmf_cfg: PmfConfiguration::Capable { required: false },
         ..Default::default()
     });
 
     sys::esp!(unsafe { sys::esp_wifi_set_country_code(b"CN\0".as_ptr().cast(), false) })?;
     wifi.set_configuration(&wifi_configuration)?;
     wifi.start()?;
+    configure_radio()?;
+
+    let (disconnect_sender, disconnect_receiver) = sync_channel(1);
+    let subscription = sys_loop.subscribe::<WifiEvent, _>(move |event| match event {
+fn configure_radio() -> Result<()> {
     sys::esp!(unsafe { sys::esp_wifi_set_ps(sys::wifi_ps_type_t_WIFI_PS_NONE) })?;
     sys::esp!(unsafe {
         sys::esp_wifi_set_protocol(
             sys::wifi_interface_t_WIFI_IF_STA,
-            (sys::WIFI_PROTOCOL_11B | sys::WIFI_PROTOCOL_11G) as u8,
+            (sys::WIFI_PROTOCOL_11B | sys::WIFI_PROTOCOL_11G | sys::WIFI_PROTOCOL_11N) as u8,
         )
     })?;
     sys::esp!(unsafe {
@@ -53,9 +60,14 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
             sys::wifi_bandwidth_t_WIFI_BW_HT20,
         )
     })?;
+    Ok(())
+}
 
-    let (disconnect_sender, disconnect_receiver) = sync_channel(1);
-    let subscription = sys_loop.subscribe::<WifiEvent, _>(move |event| match event {
+fn subscribe(
+    sys_loop: &EspSystemEventLoop,
+    disconnect_sender: SyncSender<()>,
+) -> Result<EspSystemSubscription<'static>> {
+    Ok(sys_loop.subscribe::<WifiEvent, _>(move |event| match event {
         WifiEvent::StaConnected(info) => log::info!(
             "WiFi associated: channel={}, auth={:?}, bssid={:02x?}",
             info.channel(),
@@ -72,7 +84,8 @@ pub fn connect(modem: Modem<'static>) -> Result<WifiConnection> {
             let _ = disconnect_sender.try_send(());
         }
         _ => {}
-    })?;
+    })?)
+}
 
     let (ready_sender, ready_receiver) = sync_channel(1);
     let worker = thread::Builder::new()
