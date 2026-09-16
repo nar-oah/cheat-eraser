@@ -468,10 +468,7 @@ impl<'a> Layout<'a> {
             }
             NonFrame::Formula(index) => {
                 self.draw_content_chars("$")?;
-                if let Some(logo) = self
-                    .client
-                    .get_formula((self.position as u8 + 1, index))?
-                {
+                if let Some(logo) = self.client.get_formula((self.position as u8 + 1, index))? {
                     self.scene.mod_logo(logo)?;
                 }
             }
