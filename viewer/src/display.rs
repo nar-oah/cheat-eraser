@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use embedded_graphics::{
     image::Image,
     prelude::{DrawTarget, Drawable, OriginDimensions, Point, Primitive},
@@ -85,7 +85,8 @@ impl<'a> Scene<'a> {
         Ok(())
     }
     pub fn mod_logo(&mut self, bmp_data: Vec<u8>) -> Result<()> {
-        let bmp = Bmp::from_slice(&bmp_data).unwrap();
+        let bmp = Bmp::from_slice(&bmp_data)
+            .map_err(|error| anyhow!("Invalid BMP from HTTP endpoint /formula: {error:?}"))?;
         let width = bmp.size().width as i32;
         let height = bmp.size().height as i32;
         let x = (200 - width) / 2;
