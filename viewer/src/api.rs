@@ -17,23 +17,32 @@ pub type Formula = Option<Vec<u8>>;
 
 pub struct ApiClient {
     client: Client<EspHttpConnection>,
+    scanner_status_client: Option<Client<EspHttpConnection>>,
 }
 
 impl ApiClient {
-    pub fn new() -> Result<Self> {
+    fn new_client() -> Result<Client<EspHttpConnection>> {
         let config = HttpConfiguration {
             crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
             ..Default::default()
         };
-        let client = Client::wrap(EspHttpConnection::new(&config)?);
-        Ok(Self { client })
+        Ok(Client::wrap(EspHttpConnection::new(&config)?))
     }
-    fn get_bytes(&mut self, endpoint: &str) -> Result<Vec<u8>> {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            client: Self::new_client()?,
+            scanner_status_client: None,
+        })
+    }
+    fn get_bytes_from(client: &mut Client<EspHttpConnection>, endpoint: &str) -> Result<Vec<u8>> {
         let url = format!("{}{}", URL, endpoint);
-        let request = self.client.get(&url)?;
+        let request = client.get(&url)?;
         let mut response = request.submit()?;
         check_status(endpoint, response.status())?;
         read_bounded(endpoint, |buf| response.read(buf))
+    }
+    fn get_bytes(&mut self, endpoint: &str) -> Result<Vec<u8>> {
+        Self::get_bytes_from(&mut self.client, endpoint)
     }
 
     fn get_request<T: DeserializeOwned>(&mut self, endpoint: &str) -> Result<T> {
@@ -52,8 +61,20 @@ impl ApiClient {
         parse_answer(&bytes)
     }
     pub fn get_scanner_status(&mut self) -> Result<bool> {
-        let bytes = self.get_bytes("scanner/status")?;
-        parse_scanner_status(&bytes)
+        if self.scanner_status_client.is_none() {
+            self.scanner_status_client = Some(Self::new_client()?);
+        }
+        let result = Self::get_bytes_from(
+            self.scanner_status_client
+                .as_mut()
+                .expect("scanner status client was initialized"),
+            "scanner/status",
+        )
+        .and_then(|bytes| parse_scanner_status(&bytes));
+        if result.is_err() {
+            self.scanner_status_client = None;
+        }
+        result
     }
 
     fn post_request(&mut self, endpoint: &str) -> Result<()> {

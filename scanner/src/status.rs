@@ -24,7 +24,7 @@ pub fn update(ready: bool) -> Result<()> {
     let mut connection = EspHttpConnection::new(&config)?;
 
     connection.initiate_request(Method::Post, STATUS_URL, &headers)?;
-    connection.write(body)?;
+    connection.write_all(body)?;
     connection.initiate_response()?;
 
     let response_status = connection.status();
