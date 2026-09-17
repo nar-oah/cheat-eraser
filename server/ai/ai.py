@@ -16,7 +16,7 @@ class Ai:
         self.answer = None
         client = genai.Client()
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-3.8-flash",
             contents=[
                 [
                     types.Part.from_bytes(data=image, mime_type="image/jpeg")

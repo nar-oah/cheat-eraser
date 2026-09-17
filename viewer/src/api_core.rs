@@ -97,6 +97,17 @@ pub fn parse_answer(bytes: &[u8]) -> Result<AnswerState> {
     }
 }
 
+#[derive(Deserialize)]
+struct ScannerStatus {
+    ready: bool,
+}
+
+pub fn parse_scanner_status(bytes: &[u8]) -> Result<bool> {
+    serde_json::from_slice::<ScannerStatus>(bytes)
+        .map(|status| status.ready)
+        .context("Invalid JSON from HTTP endpoint /scanner/status")
+}
+
 pub fn formula_api_position(question_index: u8, formula_number: u8) -> (u8, u8) {
     (question_index, formula_number.saturating_sub(1))
 }
@@ -234,6 +245,13 @@ mod tests {
                 error: "worker failed".to_string()
             }
         );
+    }
+
+    #[test]
+    fn parses_scanner_status() {
+        assert!(parse_scanner_status(br#"{"ready":true}"#).unwrap());
+        assert!(!parse_scanner_status(br#"{"ready":false}"#).unwrap());
+        assert!(parse_scanner_status(br#"{"ready":"yes"}"#).is_err());
     }
 
     #[test]

@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use embedded_graphics::{
     image::Image,
     prelude::{DrawTarget, Drawable, OriginDimensions, Point, Primitive},
-    primitives::{Line, PrimitiveStyle},
+    primitives::{Circle, Line, PrimitiveStyle},
 };
 use epd_waveshare::{
     color::Color,
@@ -82,6 +82,17 @@ impl<'a> Scene<'a> {
     pub fn add_text(&mut self, text: &str, point: Point) -> Result<()> {
         let style = self.text_style.clone();
         embedded_graphics::text::Text::new(text, point, style).draw(&mut self.display)?;
+        Ok(())
+    }
+    pub fn add_status_dot(&mut self, ready: bool) -> Result<()> {
+        let style = if ready {
+            PrimitiveStyle::with_fill(COLOR)
+        } else {
+            PrimitiveStyle::with_stroke(COLOR, 1)
+        };
+        Circle::new(Point::new(192, 2), 6)
+            .into_styled(style)
+            .draw(&mut self.display)?;
         Ok(())
     }
     pub fn mod_logo(&mut self, bmp_data: Vec<u8>) -> Result<()> {

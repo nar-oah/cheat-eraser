@@ -3,6 +3,7 @@ use crate::api_core::{formula_api_position, parse_non_choice, NonChoicePart};
 use crate::display::{Scene, BORDER};
 use anyhow::Result;
 use embedded_graphics::prelude::Point;
+use std::time::{Duration, Instant};
 
 const SCREEN_SIZE: i32 = 200;
 const BOARD_SIZE: i32 = SCREEN_SIZE / 2;
@@ -14,6 +15,7 @@ const CONTENT_SIZE: usize = 27;
 const BOARD_CONTENT_SIZE: usize = 9;
 const PAGE_SIZE: usize = 27;
 const MULTIPLE_PAGE_SIZE: usize = 3;
+const SCANNER_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Step {
@@ -127,12 +129,14 @@ pub struct Layout<'a> {
     step: Step,
     position: usize,
     frame: usize,
+    scanner_ready: bool,
+    scanner_status_checked: Instant,
 }
 
 impl<'a> Layout<'a> {
     pub fn new(
         scene: Scene<'a>,
-        client: ApiClient,
+        mut client: ApiClient,
         pages: Pages,
         missing: Missing,
     ) -> Result<Self> {
@@ -141,6 +145,10 @@ impl<'a> Layout<'a> {
                 (index as i32 / 2) * BOARD_SIZE,
                 (index as i32 % 2) * BOARD_SIZE,
             ))
+        });
+        let scanner_ready = client.get_scanner_status().unwrap_or_else(|error| {
+            log::warn!("Failed to read scanner status: {error:?}");
+            false
         });
         let mut layout = Self {
             scene,
@@ -155,6 +163,8 @@ impl<'a> Layout<'a> {
             step: Step::Pages,
             position: 0,
             frame: 0,
+            scanner_ready,
+            scanner_status_checked: Instant::now(),
         };
         layout.render(true)?;
         Ok(layout)
@@ -214,6 +224,23 @@ impl<'a> Layout<'a> {
     }
     pub fn check_sleep(&mut self) -> Result<()> {
         self.scene.check_sleep()
+    }
+    pub fn poll_scanner_status(&mut self) -> Result<()> {
+        if self.step != Step::Pages
+            || self.scanner_status_checked.elapsed() < SCANNER_STATUS_INTERVAL
+        {
+            return Ok(());
+        }
+        self.scanner_status_checked = Instant::now();
+        let ready = self.client.get_scanner_status().unwrap_or_else(|error| {
+            log::warn!("Failed to read scanner status: {error:?}");
+            false
+        });
+        if ready != self.scanner_ready {
+            self.scanner_ready = ready;
+            self.render(false)?;
+        }
+        Ok(())
     }
     pub fn refresh(&mut self) -> Result<()> {
         match self.step {
@@ -377,7 +404,8 @@ impl<'a> Layout<'a> {
             })
             .collect::<Vec<_>>();
         self.draw_content_items(&items)?;
-        self.boards[3].draw_location(&mut self.scene, "页", self.position + 1)
+        self.boards[3].draw_location(&mut self.scene, "页", self.position + 1)?;
+        self.scene.add_status_dot(self.scanner_ready)
     }
     fn render_missing(&mut self) -> Result<()> {
         let items = self.missing_items();
